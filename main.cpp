@@ -5,12 +5,18 @@
 #include <Windows.h>
 
 struct FileNode
-{
+{  
   enum Type
   {
+    NONE,
     FOLDER,
     FILE
-  };
+  };  
+
+  FileNode(Type A_Type, std::string A_Name)
+    :FileType(A_Type)
+    ,Name(A_Name)
+  {}
 
   Type FileType;
   std::string Name;
@@ -20,20 +26,40 @@ class FolderCrawler
 {
 public:
   void Crawl(std::string Path)
-  {
-    std::vector<FileNode> Files = ListCurrentFolder(Path);
+  {    
+    ProcessFolder(Path, 0);
+  }
+
+private:
+
+  void ProcessFolder(std::string Path, int Level)
+  {    
+    std::vector<FileNode> Files = ListCurrentFolder(Path + "\\*");
     for (int i = 0; i < Files.size(); i++)
     {
       switch (Files[i].FileType)
       {
-      case FileNode::FILE: ProcessFile(); break;
-      case FileNode::FOLDER: Crawl(""); break;
-      }     
+      case FileNode::FILE: PrintName(Files[i].Name, Level, true); break;
+      case FileNode::FOLDER: PrintName(Files[i].Name, Level, false); ProcessFolder(Path + "\\" + Files[i].Name, Level + 1); break;
+      }
 
     }
   }
 
-private:
+  void PrintName(std::string Name, int Level, bool bIsFile)
+  {
+    std::cout << std::endl;
+    for (int i = 0; i < Level; i++)
+    {
+      std::cout << " ";
+    }
+
+    if (bIsFile)
+      std::cout << "-" << Name.c_str();
+    else
+      std::cout << Name.c_str();
+  }
+
   std::vector<FileNode> ListCurrentFolder(std::string Path)
   {
     std::vector<FileNode> Files;
@@ -44,7 +70,14 @@ private:
     hFind = FindFirstFile(Path.c_str(), &FindFileData);
     while (hFind != INVALID_HANDLE_VALUE)
     {
-      std::cout << std::endl << FindFileData.cFileName;
+      if (std::string(FindFileData.cFileName) != "." && std::string(FindFileData.cFileName) != "..")
+      {
+        FileNode Node = FileNode(
+          FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ? FileNode::FOLDER : FileNode::FILE,
+          FindFileData.cFileName);
+        Files.push_back(Node);
+      }
+        
       if (!FindNextFile(hFind, &FindFileData))
       {
         hFind = INVALID_HANDLE_VALUE;
@@ -53,6 +86,7 @@ private:
 
     return Files;
   }
+
   void ProcessNode(FileNode& Node) {};
 
   virtual void ProcessFile() {};
@@ -169,7 +203,7 @@ public:
 int main()
 {
   FolderCrawler fc = FolderCrawler();
-  fc.Crawl("D:\\Games\\*");
+  fc.Crawl("D:\\Games");
 
   GlobalEventManager = new EventManager();
   Sender s = Sender();
