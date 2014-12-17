@@ -27,37 +27,26 @@ class FolderCrawler
 public:
   void Crawl(std::string Path)
   {    
-    ProcessFolder(Path, 0);
+    CrawlFolder(Path, 0);
   }
 
 private:
 
-  void ProcessFolder(std::string Path, int Level)
+  void CrawlFolder(std::string Path, int Level)
   {    
     std::vector<FileNode> Files = ListCurrentFolder(Path + "\\*");
     for (int i = 0; i < Files.size(); i++)
     {
       switch (Files[i].FileType)
       {
-      case FileNode::FILE: PrintName(Files[i].Name, Level, true); break;
-      case FileNode::FOLDER: PrintName(Files[i].Name, Level, false); ProcessFolder(Path + "\\" + Files[i].Name, Level + 1); break;
+      case FileNode::FILE: 
+        ProcessFile(Path + "\\" + Files[i].Name, Level + 1);  
+        break;
+      case FileNode::FOLDER: 
+        ProcessFile(Path + "\\" + Files[i].Name, Level + 1); CrawlFolder(Path + "\\" + Files[i].Name, Level + 1); break;
       }
 
     }
-  }
-
-  void PrintName(std::string Name, int Level, bool bIsFile)
-  {
-    std::cout << std::endl;
-    for (int i = 0; i < Level; i++)
-    {
-      std::cout << " ";
-    }
-
-    if (bIsFile)
-      std::cout << "-" << Name.c_str();
-    else
-      std::cout << Name.c_str();
   }
 
   std::vector<FileNode> ListCurrentFolder(std::string Path)
@@ -87,9 +76,36 @@ private:
     return Files;
   }
 
-  void ProcessNode(FileNode& Node) {};
+  virtual void ProcessFile(std::string Name, int Level) {};
+  virtual void ProcessFolder(std::string Name, int Level) {};
+};
 
-  virtual void ProcessFile() {};
+class FolderPrinter : public FolderCrawler
+{
+protected:
+  void PrintName(std::string Name, int Level, bool bIsFile)
+  {
+    std::cout << std::endl;
+    for (int i = 0; i < Level; i++)
+    {
+      std::cout << " ";
+    }
+
+    if (bIsFile)
+      std::cout << "-" << Name.c_str();
+    else
+      std::cout << Name.c_str();
+  }
+
+  virtual void ProcessFile(std::string Name, int Level) 
+  {
+    PrintName(Name, Level, true);
+  };
+
+  virtual void ProcessFolder(std::string Name, int Level) 
+  {
+    PrintName(Name, Level, false);
+  };
 };
 
 template<typename Ret, typename Param0>
@@ -202,8 +218,8 @@ public:
 
 int main()
 {
-  FolderCrawler fc = FolderCrawler();
-  fc.Crawl("D:\\Games");
+  FolderCrawler* fc = new FolderPrinter();
+  fc->Crawl("D:\\Games");
 
   GlobalEventManager = new EventManager();
   Sender s = Sender();
