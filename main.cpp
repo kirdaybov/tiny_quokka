@@ -1,4 +1,6 @@
 #include <iostream>
+#include <fstream>
+#include <string>
 #include <vector>
 #include <chrono>
 #include <map>
@@ -78,6 +80,51 @@ private:
 
   virtual void ProcessFile(std::string Name, int Level) {};
   virtual void ProcessFolder(std::string Name, int Level) {};
+};
+
+class StringReplacer : public FolderCrawler
+{
+public:
+  StringReplacer(std::string A_OldWord, std::string A_NewWord)
+    :OldWord(A_OldWord)
+    ,NewWord(A_NewWord)
+  {
+  }
+  std::string OldWord;
+  std::string NewWord;
+protected:
+  virtual void ProcessFile(std::string Name, int Level)
+  {
+    std::ifstream InFile(Name);
+    std::ofstream OutFile(Name + ".temp");
+    std::string Line;
+    
+    int WordLength = OldWord.size();
+
+    while (getline(InFile, Line))
+    {
+      int Start = std::string::npos;
+      do
+      {
+        Start = Line.find(OldWord);
+        if (Start != std::string::npos)
+          Line.replace(Start, WordLength, NewWord);
+      } while (Start != std::string::npos);
+
+      OutFile << Line << std::endl;
+    }
+
+    InFile.close();
+    OutFile.close();
+
+    remove(Name.c_str());
+    rename((Name + ".temp").c_str(), Name.c_str());
+  };
+
+  virtual void ProcessFolder(std::string Name, int Level)
+  {
+    
+  };
 };
 
 class FolderPrinter : public FolderCrawler
@@ -218,8 +265,8 @@ public:
 
 int main()
 {
-  FolderCrawler* fc = new FolderPrinter();
-  fc->Crawl("D:\\Games");
+  FolderCrawler* fc = new StringReplacer("MoveToAction", "MoveToCoverAction");
+  fc->Crawl("D:\\Replacer");
 
   GlobalEventManager = new EventManager();
   Sender s = Sender();
