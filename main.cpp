@@ -5,6 +5,8 @@
 #include <chrono>
 #include <map>
 #include <Windows.h>
+#include <regex>
+#include <thread>
 
 struct FileNode
 {  
@@ -169,6 +171,7 @@ public:
   typedef Ret(*TFunc)(Param0);  
 
   StaticCallback(TFunc func) : _func(func) {};
+  ~StaticCallback() { delete _func; }
 
   virtual Ret Invoke(Param0 P0)
   {
@@ -185,6 +188,7 @@ public:
   typedef Ret(T::*TFunc)(Param0);
   
   MethodCallback(T* object, Method method) : _object(object), _func(method) {}
+  ~MethodCallback() { delete _func; }
 
   virtual Ret Invoke(Param0 P0)
   {
@@ -263,16 +267,100 @@ public:
   }
 };
 
-int main()
+int CelsiusFahrenheitConverter()
 {
-  FolderCrawler* fc = new StringReplacer("MoveToAction", "MoveToCoverAction");
-  fc->Crawl("D:\\Replacer");
+  struct
+  {
+    int Lower;
+    int High;
+    int Step;
+  } Temperature;
+
+  std::cout << std::endl << "Lower limit: ";
+  std::cin >> Temperature.Lower;
+
+  std::cout << std::endl << "Higher limit: ";
+  std::cin >> Temperature.High;
+
+  std::cout << std::endl << "Step: ";
+  std::cin >> Temperature.Step;
+
+  for (int Cels = Temperature.Lower; Cels < Temperature.High; Cels += Temperature.Step)
+  {
+    float Fahrenheit = Cels * 9 / 5.0f + 32;
+
+    printf("\n %4.2f  %4.2f", (float)Cels, Fahrenheit);
+  }
+
+  return 1;
+}
+
+class A
+{
+  int Data = 5;
+};
+
+struct TreeNode
+{
+  std::vector<TreeNode*> Children;
+};
+
+class Tree
+{
+  //Tree()
+  //{
+  //  Root = new TreeNode();
+  //  Root->Children.push_back()
+  //}
+  //
+  //TreeNode* NewNode()
+  //{
+  //  TreeNode* NewNode = new TreeNode();
+  //  return NewNode;
+  //}
+  //TreeNode* Root;
+};
+
+int counter = 0;
+
+std::map<void*, int> memory;
+
+
+inline void* operator new(std::size_t sz)
+{
+  void* ptr = malloc(sz);
+  printf("\nNew called: %10d byte allocated at line %d, ", sz, __LINE__);
+  counter += sz;
+  memory.insert(ptr,int(sz));
+  return ptr;
+}
+
+inline void operator delete(void* ptr)
+{
+  printf("\nDel called: %10d byte released at line %d", memory[ptr], __LINE__);
+  counter -= memory[ptr];
+  free(ptr);
+}
+
+int main()
+{ 
+  //FolderCrawler* fc = new StringReplacer("RangeAttackAction", "CloseCombatAction");
+  //fc->Crawl("D:\\Replacer");
 
   GlobalEventManager = new EventManager();
   Sender s = Sender();
   Receiver r = Receiver();
   s.DoStuff();
+  std::regex Exp;
+  
+  delete GlobalEventManager;
+  //Exp.assign("..[a-z][a-z][a-z][a-z]");
+  //std::cout << std::endl << std::regex_match("* zxcv", Exp);
+  //std::cout << std::endl << std::regex_match("", Exp);
 
-  getchar();
+  printf("Memory left: %d", counter);
+
+  int exit;
+  std::cin >> exit;
   return 0;
 }
