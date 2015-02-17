@@ -7,6 +7,9 @@
 #include <Windows.h>
 #include <regex>
 #include <thread>
+#include <stdarg.h>
+
+#include "Image.h"
 
 struct FileNode
 {  
@@ -224,7 +227,14 @@ enum Event
 
 class EventManager
 {
+  typedef std::map<Event, Delegate<void, int>*> TListeners;
 public:
+  ~EventManager() 
+  {
+    for (TListeners::iterator i = Listeners.begin(); i != Listeners.end(); ++i)
+      delete i->second;
+  }
+
   void ReceiveMessage(Event A_Event)
   {
     if (Listeners[A_Event])
@@ -238,7 +248,7 @@ public:
     Listeners[A_Event] = Delegate;
   }
 
-  std::map<Event, Delegate<void, int>*> Listeners;
+  TListeners Listeners;
 };
 
 static EventManager* GlobalEventManager;
@@ -321,25 +331,114 @@ class Tree
   //TreeNode* Root;
 };
 
-int counter = 0;
+//#define print_out(str, ...) \
+//  {     \
+//  char output[256]; \
+//  sprintf_s(output, str, ##__VA_ARGS__); \
+//  std::cout << output; \
+//  OutputDebugString(output); \
+//  }
 
-std::map<void*, int> memory;
+void print_out(const char* format, ...)
+{
+  char output[256];
+  va_list args;
+  va_start(args, format);
+  vsprintf_s(output, format, args);
+  va_end(args);
+  std::cout << output;
+  OutputDebugString(output);
+}
 
+const int MEMORY_COUNTER_SIZE = 512;
+
+struct s_memory
+{
+  ~s_memory() { print_out("Memory left: %d\n", in_use); }
+
+  int counter = 0;
+  int in_use = 0;
+  struct
+  {
+    void* ptr;
+    int size;
+  } arr[MEMORY_COUNTER_SIZE];
+} memory;
 
 inline void* operator new(std::size_t sz)
-{
+{  
   void* ptr = malloc(sz);
-  printf("\nNew called: %10d byte allocated at line %d, ", sz, __LINE__);
-  counter += sz;
-  memory.insert(ptr,int(sz));
+  //print_out("\nNew called: %10d byte allocated at line %d, ", sz, __LINE__);
+  memory.in_use += sz;
+  if (memory.counter < MEMORY_COUNTER_SIZE)
+  {    
+    memory.arr[memory.counter] = { ptr, sz };
+    memory.counter++;
+  }
   return ptr;
 }
 
 inline void operator delete(void* ptr)
 {
-  printf("\nDel called: %10d byte released at line %d", memory[ptr], __LINE__);
-  counter -= memory[ptr];
+  int i = 0;
+  for (i = 0; i < MEMORY_COUNTER_SIZE; i++)
+    if (memory.arr[i].ptr == ptr) break;
+  //if (i < MEMORY_COUNTER_SIZE-1)
+  //  print_out("\nDel called: %10d byte released at line %d", memory.arr[i].size, __LINE__);
+  memory.in_use -= memory.arr[i].size;
   free(ptr);
+}
+
+void open_hdri(std::string filename)
+{
+  int width = 2400;
+  int height = 1200;
+
+  TGAImage* image = new TGAImage(width, height);
+  
+  //
+
+  std::ifstream file;
+
+  file.open(filename);
+  std::string line;
+  int k = 0;
+  //while (std::getline(file, line) && k < 6)
+  //{
+  //  //uint8_t RGBEData[4];
+  //  //file >> RGBEData;
+  //  std::cout << std::endl << line;
+  //  k++;
+  //}
+  int count = 0;
+  while (!file.eof())
+  {
+    char Byte;
+    file.read(&Byte, 1);
+    count++;
+  }
+  print_out("\n %d ", count);
+  for (int i = 0; i < width; i++)
+  {
+    for (int j = 0; j < height; j++)
+    {
+      if (file.eof())
+        break;
+
+      char RGBEData[4];
+      file.read(RGBEData, 4);      
+      unsigned char RGBEData_c[4];
+      memcpy(RGBEData_c, RGBEData, 4);
+      float scale = 1.f;// ldexp(1.0, RGBEData_c[3] - 136);
+      //print_out("\n%d %d %d %d", RGBEData_c[0], RGBEData_c[1], RGBEData_c[2], RGBEData_c[3]);
+      Colour c = { RGBEData_c[0] * scale, RGBEData_c[1] * scale, RGBEData_c[2] * scale, 255 };
+      image->setPixel(c, i, j);
+    }
+  }
+  
+  file.close();
+
+  image->WriteImage("D:\\Stuff\\hdri_cubemap_converter\\output.tga");
 }
 
 int main()
@@ -347,20 +446,23 @@ int main()
   //FolderCrawler* fc = new StringReplacer("RangeAttackAction", "CloseCombatAction");
   //fc->Crawl("D:\\Replacer");
 
-  GlobalEventManager = new EventManager();
-  Sender s = Sender();
-  Receiver r = Receiver();
-  s.DoStuff();
-  std::regex Exp;
   
-  delete GlobalEventManager;
+  //GlobalEventManager = new EventManager();
+  //Sender s = Sender();
+  //Receiver r = Receiver();
+  //s.DoStuff();
+  ////std::regex Exp;
+  //
+  //delete GlobalEventManager;
   //Exp.assign("..[a-z][a-z][a-z][a-z]");
   //std::cout << std::endl << std::regex_match("* zxcv", Exp);
   //std::cout << std::endl << std::regex_match("", Exp);
 
-  printf("Memory left: %d", counter);
 
-  int exit;
-  std::cin >> exit;
+  open_hdri("D:\\Stuff\\hdri_cubemap_converter\\uffizi-large.hdr");
+
+  system("PAUSE");
+  //int exit;
+  //std::cin >> exit;
   return 0;
 }
