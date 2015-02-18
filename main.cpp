@@ -10,6 +10,12 @@
 #include <stdarg.h>
 
 #include "Image.h"
+#include "rgbe.h"
+
+//#define _CRT_SECURE_NO_WARNINGS
+//#define _CRT_SECURE_NO_DEPRECATE
+//
+//#pragma warning(disable : 4996)
 
 struct FileNode
 {  
@@ -396,47 +402,58 @@ void open_hdri(std::string filename)
 
   TGAImage* image = new TGAImage(width, height);
   
-  //
+  FILE* f;
 
-  std::ifstream file;
+  errno_t err = fopen_s(&f, filename.c_str(), "rb");
+  rgbe_header_info header;
 
-  file.open(filename);
-  std::string line;
-  int k = 0;
-  //while (std::getline(file, line) && k < 6)
-  //{
-  //  //uint8_t RGBEData[4];
-  //  //file >> RGBEData;
-  //  std::cout << std::endl << line;
-  //  k++;
-  //}
-  int count = 0;
-  while (!file.eof())
+  RGBE_ReadHeader(f, &width, &height, NULL);
+
+  // read pixels
+  float* data = new float[width*height*3];  
+  RGBE_ReadPixels_RLE(f, data, width, height);
+  fclose(f);
+
+  // convert for convenience
+  struct pixel
   {
-    char Byte;
-    file.read(&Byte, 1);
-    count++;
+    float r, g, b;
+  };
+  pixel* pixels = new pixel[width*height];
+  memcpy(pixels, data, sizeof(float) * 3 * width*height);
+
+  // normalize
+  float max = 0.0f;
+  float min = FLT_MAX;
+  for (int i = 0; i < width*height; i++)
+  {
+    if (pixels[i].r > max) max = pixels[i].r;
+    if (pixels[i].g > max) max = pixels[i].g;
+    if (pixels[i].b > max) max = pixels[i].b;
+    if (pixels[i].r < min) min = pixels[i].r;
+    if (pixels[i].g < min) min = pixels[i].g;
+    if (pixels[i].b < min) min = pixels[i].b;
   }
-  print_out("\n %d ", count);
+  max -= min;
+  for (int i = 0; i < width*height; i++)
+  {
+    pixels[i].r -= min;
+    pixels[i].g -= min;
+    pixels[i].b -= min;
+    pixels[i].r /= max;
+    pixels[i].g /= max;
+    pixels[i].b /= max;
+  }  
+
   for (int i = 0; i < width; i++)
   {
     for (int j = 0; j < height; j++)
     {
-      if (file.eof())
-        break;
-
-      char RGBEData[4];
-      file.read(RGBEData, 4);      
-      unsigned char RGBEData_c[4];
-      memcpy(RGBEData_c, RGBEData, 4);
-      float scale = 1.f;// ldexp(1.0, RGBEData_c[3] - 136);
-      //print_out("\n%d %d %d %d", RGBEData_c[0], RGBEData_c[1], RGBEData_c[2], RGBEData_c[3]);
-      Colour c = { RGBEData_c[0] * scale, RGBEData_c[1] * scale, RGBEData_c[2] * scale, 255 };
-      image->setPixel(c, i, j);
+      pixel p = pixels[i + j*width];
+      Colour c = { p.r * 255, p.g * 255, p.b * 255, 255 };
+      image->setPixel(c, j, i);
     }
   }
-  
-  file.close();
 
   image->WriteImage("D:\\Stuff\\hdri_cubemap_converter\\output.tga");
 }
