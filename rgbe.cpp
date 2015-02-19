@@ -116,8 +116,10 @@ int RGBE_WriteHeader(FILE *fp, int width, int height, rgbe_header_info *info)
   char *programtype = "RGBE";
 
   if (info && (info->valid & RGBE_VALID_PROGRAMTYPE))
-    programtype = info->programtype;
+    programtype = info->programtype;  
   if (fprintf(fp, "#?%s\n", programtype) < 0)
+    return rgbe_error(rgbe_write_error, NULL);
+  if (fprintf(fp, "FORMAT=32-bit_rle_rgbe\n") < 0)
     return rgbe_error(rgbe_write_error, NULL);
   /* The #? is to identify file type, the programtype is optional. */
   if (info && (info->valid & RGBE_VALID_GAMMA)) {
@@ -127,8 +129,8 @@ int RGBE_WriteHeader(FILE *fp, int width, int height, rgbe_header_info *info)
   if (info && (info->valid & RGBE_VALID_EXPOSURE)) {
     if (fprintf(fp, "EXPOSURE=%g\n", info->exposure) < 0)
       return rgbe_error(rgbe_write_error, NULL);
-  }
-  if (fprintf(fp, "FORMAT=32-bit_rle_rgbe\n\n") < 0)
+  }  
+  if (fprintf(fp, "\n") < 0)
     return rgbe_error(rgbe_write_error, NULL);
   if (fprintf(fp, "-Y %d +X %d\n", height, width) < 0)
     return rgbe_error(rgbe_write_error, NULL);
@@ -184,9 +186,11 @@ int RGBE_ReadHeader(FILE *fp, int *width, int *height, rgbe_header_info *info)
   }
   if (fgets(buf, sizeof(buf) / sizeof(buf[0]), fp) == 0)
     return rgbe_error(rgbe_read_error, NULL);
-  if (strcmp(buf, "\n") != 0)
-    return rgbe_error(rgbe_format_error,
-    "missing blank line after FORMAT specifier");
+  while (strcmp(buf, "\n") != 0)
+  {
+    if (fgets(buf, sizeof(buf) / sizeof(buf[0]), fp) == 0)
+      return rgbe_error(rgbe_read_error, NULL);
+  }    
   if (fgets(buf, sizeof(buf) / sizeof(buf[0]), fp) == 0)
     return rgbe_error(rgbe_read_error, NULL);
   if (sscanf_s(buf, "-Y %d +X %d", height, width) < 2)

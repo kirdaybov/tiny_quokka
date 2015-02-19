@@ -8,6 +8,7 @@
 #include <regex>
 #include <thread>
 #include <stdarg.h>
+#include <math.h>
 
 #include "Image.h"
 #include "rgbe.h"
@@ -395,13 +396,18 @@ inline void operator delete(void* ptr)
   free(ptr);
 }
 
+struct pixel
+{
+  float r, g, b;
+};
+
+void make_cube_image(pixel* pixels, int width, int height);
+
 void open_hdri(std::string filename)
 {
   int width = 2400;
   int height = 1200;
 
-  TGAImage* image = new TGAImage(width, height);
-  
   FILE* f;
 
   errno_t err = fopen_s(&f, filename.c_str(), "rb");
@@ -414,48 +420,209 @@ void open_hdri(std::string filename)
   RGBE_ReadPixels_RLE(f, data, width, height);
   fclose(f);
 
-  // convert for convenience
-  struct pixel
-  {
-    float r, g, b;
-  };
+  // convert for convenience  
   pixel* pixels = new pixel[width*height];
   memcpy(pixels, data, sizeof(float) * 3 * width*height);
 
   // normalize
-  float max = 0.0f;
-  float min = FLT_MAX;
-  for (int i = 0; i < width*height; i++)
-  {
-    if (pixels[i].r > max) max = pixels[i].r;
-    if (pixels[i].g > max) max = pixels[i].g;
-    if (pixels[i].b > max) max = pixels[i].b;
-    if (pixels[i].r < min) min = pixels[i].r;
-    if (pixels[i].g < min) min = pixels[i].g;
-    if (pixels[i].b < min) min = pixels[i].b;
-  }
-  max -= min;
-  for (int i = 0; i < width*height; i++)
-  {
-    pixels[i].r -= min;
-    pixels[i].g -= min;
-    pixels[i].b -= min;
-    pixels[i].r /= max;
-    pixels[i].g /= max;
-    pixels[i].b /= max;
-  }  
+  //float max = 0.0f;
+  //float min = FLT_MAX;
+  //for (int i = 0; i < width*height; i++)
+  //{
+  //  if (pixels[i].r > max) max = pixels[i].r;
+  //  if (pixels[i].g > max) max = pixels[i].g;
+  //  if (pixels[i].b > max) max = pixels[i].b;
+  //  if (pixels[i].r < min) min = pixels[i].r;
+  //  if (pixels[i].g < min) min = pixels[i].g;
+  //  if (pixels[i].b < min) min = pixels[i].b;
+  //}
+  //max -= min;
+  //for (int i = 0; i < width*height; i++)
+  //{
+  //  pixels[i].r -= min;
+  //  pixels[i].g -= min;
+  //  pixels[i].b -= min;
+  //  pixels[i].r /= max/255.f;
+  //  pixels[i].g /= max/255.f;
+  //  pixels[i].b /= max/255.f;
+  //  //sqrtf(sqrtf(sqrtf(sqrtf(pixels[i].r))));
+  //  //sqrtf(sqrtf(sqrtf(sqrtf(pixels[i].g))));
+  //  //sqrtf(sqrtf(sqrtf(sqrtf(pixels[i].b))));
+  //}  
+
+  make_cube_image(pixels, width, height);
+  return;
+
+  TGAImage* image = new TGAImage(width, height);
 
   for (int i = 0; i < width; i++)
   {
     for (int j = 0; j < height; j++)
     {
       pixel p = pixels[i + j*width];
-      Colour c = { p.r * 255, p.g * 255, p.b * 255, 255 };
-      image->setPixel(c, j, i);
+      Colour c = { p.r, p.g, p.b, 255 };
+      image->setPixel(c, height - j - 1, i);
     }
   }
 
   image->WriteImage("D:\\Stuff\\hdri_cubemap_converter\\output.tga");
+}
+
+void make_cube_image(pixel* pixels, int width, int height)
+{
+  float r = height / 2.f;
+
+  float cube_edge = 2*r / sqrtf(3);  
+
+  int new_width = cube_edge * 4 + 1;
+  int new_height = cube_edge*2;
+
+  TGAImage* image = new TGAImage(new_width, new_height);
+
+  pixel* out_pixels = new pixel[new_width*new_height];
+
+  // first square
+
+  float c_x = -cube_edge / 2;
+  float c_y = -cube_edge / 2;
+  float c_z = -cube_edge / 2;
+
+  float M_PI = 3.1415;
+  
+  //for (int x = c_x; x < cube_edge / 2; x += 1)
+  //{
+  //  for (int y = c_y; y < cube_edge / 2; y +=1)
+  //  {
+  //    float z = -sqrtf(r*r - x*x - y*y);
+  //    float inclination = acosf(z / r);
+  //    float azimuth = acosf(x / r / sinf(inclination));
+  //    if (inclination < 0) inclination += 2 * M_PI;
+  //    if (azimuth     < 0) azimuth     += 2 * M_PI;
+  //    
+  //    int r_x = round(azimuth / (2 * M_PI)*width);
+  //    int r_y = round(inclination / M_PI*height);
+  //
+  //    if (r_x < width && r_x >= 0 && r_y < height && r_y >= 0)
+  //    {
+  //      pixel p = pixels[r_x + r_y*width];
+  //      Colour c = { p.r * 255, p.g * 255, p.b * 255, 255 };
+  //      image->setPixel(c, x - c_x , y - c_x);
+  //    }
+  //  }  
+  //}
+
+  for (int x = c_x; x < cube_edge / 2; x += 1)
+  {
+    for (int z = c_z; z < cube_edge / 2; z += 1)
+    {
+      float y = -sqrtf(r*r - x*x - z*z);
+      float inclination = atan2f(sqrtf(x*x + y*y), z);
+      float azimuth = atan2f(y, x);
+      if (inclination < 0) inclination += 2 * M_PI;
+      if (azimuth     < 0) azimuth += 2 * M_PI;
+
+      int r_x = round(azimuth / (2 * M_PI)*width);
+      int r_y = round(inclination / M_PI*height);
+
+      if (r_x < width && r_x >= 0 && r_y < height && r_y >= 0)
+      {
+        pixel p = pixels[r_x + r_y*width];
+        out_pixels[int(x - c_x) + new_width*int(new_height - (z - c_z) - 1)] = p;
+      }
+    }
+  }
+
+  for (int y = c_y; y < cube_edge / 2; y += 1)
+  {
+    for (int z = c_z; z < cube_edge / 2; z += 1)
+    {
+      float x = sqrtf(r*r - y*y - z*z);
+      float inclination = atan2f(sqrtf(x*x + y*y), z);
+      float azimuth = atan2f(y, x);
+      if (inclination < 0) inclination += 2 * M_PI;
+      if (azimuth     < 0) azimuth += 2 * M_PI;
+
+      int r_x = round(azimuth / (2 * M_PI)*width);
+      int r_y = round(inclination / M_PI*height);
+
+      if (r_x < width && r_x >= 0 && r_y < height && r_y >= 0)
+      {
+        pixel p = pixels[r_x + r_y*width];
+        out_pixels[int(y - c_y) + int(cube_edge) + new_width*int(new_height - (z - c_z) - 1)] = p;
+      }
+    }
+  }
+
+  for (int x = c_x; x < cube_edge / 2; x += 1)
+  {
+    for (int z = c_z; z < cube_edge / 2; z += 1)
+    {
+      float y = sqrtf(r*r - x*x - z*z);
+      float inclination = atan2f(sqrtf(x*x + y*y), z);
+      float azimuth = atan2f(y, x);
+      if (inclination < 0) inclination += 2 * M_PI;
+      if (azimuth     < 0) azimuth += 2 * M_PI;
+
+      int r_x = round(azimuth / (2 * M_PI)*width);
+      int r_y = round(inclination / M_PI*height);
+
+      if (r_x < width && r_x >= 0 && r_y < height && r_y >= 0)
+      {
+        pixel p = pixels[r_x + r_y*width];
+        out_pixels[int(x - c_x) + int(cube_edge)*2 + new_width*int(new_height - (z - c_z) - 1)] = p;
+      }
+    }
+  }
+
+  for (int y = c_y; y < cube_edge / 2; y += 1)
+  {
+    for (int z = c_z; z < cube_edge / 2; z += 1)
+    {
+      float x = -sqrtf(r*r - y*y - z*z);
+      float inclination = atan2f(sqrtf(x*x + y*y), z);
+      float azimuth = atan2f(y, x);
+      if (inclination < 0) inclination += 2 * M_PI;
+      if (azimuth     < 0) azimuth += 2 * M_PI;
+
+      int r_x = round(azimuth / (2 * M_PI)*width);
+      int r_y = round(inclination / M_PI*height);
+
+      if (r_x < width && r_x >= 0 && r_y < height && r_y >= 0)
+      {
+        pixel p = pixels[r_x + r_y*width];
+        out_pixels[int(y - c_y) + int(cube_edge)*3 + new_width*int(new_height - (z - c_z) - 1)] = p;
+      }
+    }
+  }
+
+  FILE* f;
+
+  std::string filename = "D:\\Stuff\\hdri_cubemap_converter\\output.hdr";
+  errno_t err = fopen_s(&f, filename.c_str(), "wb");
+
+  rgbe_header_info header;
+  header.exposure = 1.0f;
+  strcpy_s<16>(header.programtype, "RADIANCE");
+  header.valid = RGBE_VALID_PROGRAMTYPE | RGBE_VALID_EXPOSURE;
+  RGBE_WriteHeader(f, new_width, new_height, &header);
+
+  float* data = new float[new_width*new_height * 3];
+  memcpy(data, out_pixels, sizeof(float) * 3 * new_width*new_height);
+  RGBE_WritePixels_RLE(f, data, new_width, new_height);
+
+  fclose(f);
+
+  //for (int i = 0; i < width; i++)
+  //{
+  //  for (int j = 0; j < height; j++)
+  //  {
+  //    pixel p = pixels[i + j*width];
+  //    Colour c = { p.r * 255, p.g * 255, p.b * 255, 255 };
+  //    image->setPixel(c, j, i);
+  //  }
+  //}
+
+  //image->WriteImage(filename);
 }
 
 int main()
@@ -477,6 +644,8 @@ int main()
 
 
   open_hdri("D:\\Stuff\\hdri_cubemap_converter\\uffizi-large.hdr");
+  //open_hdri("D:\\Stuff\\hdri_cubemap_converter\\glacier.hdr");
+  //open_hdri("D:\\Stuff\\hdri_cubemap_converter\\output.hdr");
 
   system("PAUSE");
   //int exit;
