@@ -401,41 +401,25 @@ void make_cube_image(pixel* pixels, int width, int height)
   float r = height / 2.f;
 
   float cube_edge = 2*r / sqrtf(3);  
+  int cube_edge_i = round(cube_edge);
 
   int new_width = cube_edge * 4 + 1;
   int new_height = cube_edge*3;
   
   pixel* out_pixels = new pixel[new_width*new_height];
-
-  // first square
-
+  
   float c_x = -cube_edge / 2;
   float c_y = -cube_edge / 2;
   float c_z = -cube_edge / 2;
 
   float M_PI = 3.1415;
   
-  //for (int x = c_x; x < cube_edge / 2; x += 1)
-  //{
-  //  for (int y = c_y; y < cube_edge / 2; y +=1)
-  //  {
-  //    float z = -sqrtf(r*r - x*x - y*y);
-  //    float inclination = acosf(z / r);
-  //    float azimuth = acosf(x / r / sinf(inclination));
-  //    if (inclination < 0) inclination += 2 * M_PI;
-  //    if (azimuth     < 0) azimuth     += 2 * M_PI;
-  //    
-  //    int r_x = round(azimuth / (2 * M_PI)*width);
-  //    int r_y = round(inclination / M_PI*height);
-  //
-  //    if (r_x < width && r_x >= 0 && r_y < height && r_y >= 0)
-  //    {
-  //      pixel p = pixels[r_x + r_y*width];
-  //      Colour c = { p.r * 255, p.g * 255, p.b * 255, 255 };
-  //      image->setPixel(c, x - c_x , y - c_x);
-  //    }
-  //  }  
-  //}
+  pixel* edges[6];
+
+  for (int i = 0; i < 6; i++)
+  {
+    edges[i] = new pixel[cube_edge_i*cube_edge_i];
+  }
 
   for (int x = c_x; x < cube_edge / 2; x += 1)
   {
@@ -457,7 +441,8 @@ void make_cube_image(pixel* pixels, int width, int height)
       if (r_x < width && r_x >= 0 && r_y < height && r_y >= 0)
       {
         pixel p = pixels[r_x + r_y*width];
-		out_pixels[int(x - c_x) + new_width*int(new_height - (z - c_z) - 1 - int(cube_edge))] = p;
+        int index = int(x - c_x) + cube_edge_i*int(z - c_z);
+		if (index < cube_edge_i*cube_edge_i && index >=0) edges[0][index] = p;
       }
     }
   }
@@ -482,7 +467,8 @@ void make_cube_image(pixel* pixels, int width, int height)
       if (r_x < width && r_x >= 0 && r_y < height && r_y >= 0)
       {
         pixel p = pixels[r_x + r_y*width];
-		out_pixels[int(y - c_y) + int(cube_edge) + new_width*int(new_height - (z - c_z) - 1 - int(cube_edge))] = p;
+        int index = int(y - c_y) + cube_edge_i*int(z - c_z);
+        if (index < cube_edge_i*cube_edge_i && index >= 0) edges[1][index] = p;
       }
     }
   }
@@ -507,7 +493,8 @@ void make_cube_image(pixel* pixels, int width, int height)
 		  if (r_x < width && r_x >= 0 && r_y < height && r_y >= 0)
 		  {
 			  pixel p = pixels[r_x + r_y*width];
-			  out_pixels[int(x - c_x) + int(cube_edge) * 2 + new_width*int(new_height - (z - c_z) - 1 - int(cube_edge))] = p;
+              int index = int(x - c_x) + cube_edge_i*int(z - c_z);
+              if (index < cube_edge_i*cube_edge_i && index >= 0) edges[2][index] = p;
 		  }
 	  }
   }
@@ -532,66 +519,91 @@ void make_cube_image(pixel* pixels, int width, int height)
 		  if (r_x < width && r_x >= 0 && r_y < height && r_y >= 0)
 		  {
 			  pixel p = pixels[r_x + r_y*width];
-			  out_pixels[int(y - c_y) + int(cube_edge) * 3 + new_width*int(new_height - (z - c_z) - 1 - int(cube_edge))] = p;
+              int index = int(y - c_y) + cube_edge_i*int(z - c_z);
+              if (index < cube_edge_i*cube_edge_i && index >= 0) edges[3][index] = p;
 		  }
 	  }
   }
 
-	for (int x = c_x; x < cube_edge / 2; x += 1)
-	{
-	  for (int y = c_y; y < cube_edge / 2; y += 1)
-	  {
-		  float z = cube_edge / 2;
-		  float xyz_sqrt = sqrtf(x*x + y*y + z*z);
-		  float s_x = r*x / xyz_sqrt;
-		  float s_y = -r*y / xyz_sqrt;
-		  float s_z = r*z / xyz_sqrt;
-		  float inclination = atan2f(sqrtf(s_x*s_x + s_y*s_y), s_z);
-		  float azimuth = atan2f(s_y, s_x);
-		  if (inclination < 0) inclination += 2 * M_PI;
-		  if (azimuth     < 0) azimuth += 2 * M_PI;
-	
-		  int r_x = round(azimuth / (2 * M_PI)*width);
-		  int r_y = round(inclination / M_PI*height);
-	
-		  if (r_x < width && r_x >= 0 && r_y < height && r_y >= 0)
-		  {
-			  pixel p = pixels[r_x + r_y*width];
-			  out_pixels[int(y - c_y) + int(cube_edge) + new_width*int(new_height - (x - c_x) - 1 - int(cube_edge) * 2)] = p;
-		  }
-	  }
-	}
-	
-	for (int x = c_x; x < cube_edge / 2; x += 1)
-	{
-	  for (int y = c_y; y < cube_edge / 2; y += 1)
-	  {
-		  float z = cube_edge / 2;
-		  float xyz_sqrt = sqrtf(x*x + y*y + z*z);
-		  float s_x = -r*x / xyz_sqrt;
-		  float s_y = -r*y / xyz_sqrt;
-		  float s_z = -r*z / xyz_sqrt;
-		  float inclination = atan2f(sqrtf(s_x*s_x + s_y*s_y), s_z);
-		  float azimuth = atan2f(s_y, s_x);
-		  if (inclination < 0) inclination += 2 * M_PI;
-		  if (azimuth     < 0) azimuth += 2 * M_PI;
-	
-		  int r_x = round(azimuth / (2 * M_PI)*width);
-		  int r_y = round(inclination / M_PI*height);
-	
-		  if (r_x < width && r_x >= 0 && r_y < height && r_y >= 0)
-		  {
-			  pixel p = pixels[r_x + r_y*width];
-			  out_pixels[int(y - c_y) + int(cube_edge) + new_width*int(new_height - (x - c_x) - 1)] = p;
-		  }
-	  }
-	}
+  for (int x = c_x; x < cube_edge / 2; x += 1)
+  {
+    for (int y = c_y; y < cube_edge / 2; y += 1)
+    {
+  	  float z = cube_edge / 2;
+  	  float xyz_sqrt = sqrtf(x*x + y*y + z*z);
+  	  float s_x = r*x / xyz_sqrt;
+  	  float s_y = -r*y / xyz_sqrt;
+  	  float s_z = r*z / xyz_sqrt;
+  	  float inclination = atan2f(sqrtf(s_x*s_x + s_y*s_y), s_z);
+  	  float azimuth = atan2f(s_y, s_x);
+  	  if (inclination < 0) inclination += 2 * M_PI;
+  	  if (azimuth     < 0) azimuth += 2 * M_PI;
   
+  	  int r_x = round(azimuth / (2 * M_PI)*width);
+  	  int r_y = round(inclination / M_PI*height);
+  
+  	  if (r_x < width && r_x >= 0 && r_y < height && r_y >= 0)
+  	  {
+  		  pixel p = pixels[r_x + r_y*width];
+          int index = int(y - c_y) + cube_edge_i*int(x - c_x);
+          if (index < cube_edge_i*cube_edge_i && index >= 0) edges[4][index] = p;
+  	  }
+    }
+  }
+  
+  for (int x = c_x; x < cube_edge / 2; x += 1)
+  {
+    for (int y = c_y; y < cube_edge / 2; y += 1)
+    {
+  	  float z = cube_edge / 2;
+  	  float xyz_sqrt = sqrtf(x*x + y*y + z*z);
+  	  float s_x = -r*x / xyz_sqrt;
+  	  float s_y = -r*y / xyz_sqrt;
+  	  float s_z = -r*z / xyz_sqrt;
+  	  float inclination = atan2f(sqrtf(s_x*s_x + s_y*s_y), s_z);
+  	  float azimuth = atan2f(s_y, s_x);
+  	  if (inclination < 0) inclination += 2 * M_PI;
+  	  if (azimuth     < 0) azimuth += 2 * M_PI;
+  
+  	  int r_x = round(azimuth / (2 * M_PI)*width);
+  	  int r_y = round(inclination / M_PI*height);
+  
+  	  if (r_x < width && r_x >= 0 && r_y < height && r_y >= 0)
+  	  {
+  		  pixel p = pixels[r_x + r_y*width];
+          int index = int(y - c_y) + cube_edge_i*int(x - c_x);
+          if (index < cube_edge_i*cube_edge_i && index >= 0) edges[5][index] = p;
+  	  }
+    }
+  }
+  
+  for (int i = 0; i < 6; i++)
+  {
+    int dx, dy;
+    switch (i)
+    {
+    case 0: dx = 0            ; dy = cube_edge_i  ; break;
+    case 1: dx = cube_edge_i  ; dy = cube_edge_i  ; break;
+    case 2: dx = cube_edge_i*2; dy = cube_edge_i  ; break;
+    case 3: dx = cube_edge_i*3; dy = cube_edge_i  ; break;
+    case 4: dx = cube_edge_i  ; dy = cube_edge_i*2; break;
+    case 5: dx = cube_edge_i  ; dy = 0            ; break;
+    }
+    for (int x = 0; x < cube_edge_i; x++)
+    {
+      for (int y = 0; y < cube_edge_i; y++)
+      {
+        int index1 = x + dx + new_width*(new_height - y - dy - 1);
+        int index2 = x + cube_edge_i*y;
+        if(index1 >= 0) out_pixels[index1] = edges[i][index2];
+      }      
+    }
+  }
 
   FILE* f;
 
-  //std::string filename = "D:\\Stuff\\hdri_cubemap_converter\\output.hdr";
-	std::string filename = "E:\\Work\\hdr_cubemap\\images\\output.hdr";
+  std::string filename = "D:\\Stuff\\hdri_cubemap_converter\\output.hdr";
+  //std::string filename = "E:\\Work\\hdr_cubemap\\images\\output.hdr";
   errno_t err = fopen_s(&f, filename.c_str(), "wb");
 
   rgbe_header_info header;
@@ -623,7 +635,6 @@ int main()
 { 
   //FolderCrawler* fc = new StringReplacer("RangeAttackAction", "CloseCombatAction");
   //fc->Crawl("D:\\Replacer");
-
   
   //GlobalEventManager = new EventManager();
   //Sender s = Sender();
@@ -638,8 +649,9 @@ int main()
 
   //open_hdri("E:\\Work\\hdr_cubemap\\images\\uffizi-large.hdr");
   //open_hdri("E:\\Work\\hdr_cubemap\\images\\grace-new.hdr");
-	open_hdri("E:\\Work\\hdr_cubemap\\images\\glacier.hdr");
-  //open_hdri("D:\\Stuff\\hdri_cubemap_converter\\uffizi-large.hdr");
+  //open_hdri("E:\\Work\\hdr_cubemap\\images\\glacier.hdr");
+  //open_hdri("D:\\Stuff\\hdri_cubemap_converter\\HDR_110_Tunnel_Ref.hdr");
+  open_hdri("D:\\Stuff\\hdri_cubemap_converter\\uffizi-large.hdr");
   //open_hdri("D:\\Stuff\\hdri_cubemap_converter\\glacier.hdr");
   //open_hdri("D:\\Stuff\\hdri_cubemap_converter\\output.hdr");
 
