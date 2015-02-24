@@ -42,10 +42,8 @@ int RGBE_ReadPixels(FILE *fp, float *data, int numpixels);
 
 /* read or write run length encoded files */
 /* must be called to read or write whole scanlines */
-int RGBE_WritePixels_RLE(FILE *fp, float *data, int scanline_width,
-  int num_scanlines);
-int RGBE_ReadPixels_RLE(FILE *fp, float *data, int scanline_width,
-  int num_scanlines);
+int RGBE_WritePixels_RLE(FILE *fp, float *data, int scanline_width, int num_scanlines);
+int RGBE_ReadPixels_RLE(FILE *fp, float *data, int scanline_width, int num_scanlines);
 
 #endif /* _H_RGBE */
 
