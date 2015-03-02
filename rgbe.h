@@ -45,6 +45,9 @@ int RGBE_ReadPixels(FILE *fp, float *data, int numpixels);
 int RGBE_WritePixels_RLE(FILE *fp, float *data, int scanline_width, int num_scanlines);
 int RGBE_ReadPixels_RLE(FILE *fp, float *data, int scanline_width, int num_scanlines);
 
+//static void float2rgbe(unsigned char rgbe[4], float red, float green, float blue);
+//static void rgbe2float(float *red, float *green, float *blue, unsigned char rgbe[4])
+
 #endif /* _H_RGBE */
 
 

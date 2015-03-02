@@ -33,11 +33,8 @@ struct DDS_HEADER{
 };
 
 void read_dds_header(FILE* f, DDS_HEADER* header)
-{
-  size_t bytes = fread(header, sizeof(DWORD), 1, f);
-  bytes = fread(header, sizeof(DDS_HEADER), 1, f);
-
-  return;
+{  
+  size_t bytes = fread(header, sizeof(DDS_HEADER), 1, f);
 };
 
 

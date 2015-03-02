@@ -1,557 +1,363 @@
-#include <iostream>
-#include <fstream>
-#include <string>
-#include <vector>
-#include <chrono>
-#include <map>
-#include <Windows.h>
-#include <regex>
-#include <thread>
-#include <stdarg.h>
+
+#include <algorithm>
 #include <math.h>
 
 #include "rgbe.h"
 #include "dds.h"
-
-struct FileNode
-{  
-  enum Type
-  {
-    NONE,
-    FOLDER,
-    FILE
-  };  
-
-  FileNode(Type A_Type, std::string A_Name)
-    :FileType(A_Type)
-    ,Name(A_Name)
-  {}
-
-  Type FileType;
-  std::string Name;
-};
-
-class FolderCrawler
-{
-public:
-  void Crawl(std::string Path)
-  {    
-    CrawlFolder(Path, 0);
-  }
-
-private:
-
-  void CrawlFolder(std::string Path, int Level)
-  {    
-    std::vector<FileNode> Files = ListCurrentFolder(Path + "\\*");
-    for (int i = 0; i < Files.size(); i++)
-    {
-      switch (Files[i].FileType)
-      {
-      case FileNode::FILE: 
-        ProcessFile(Path + "\\" + Files[i].Name, Level + 1);  
-        break;
-      case FileNode::FOLDER: 
-        ProcessFile(Path + "\\" + Files[i].Name, Level + 1); CrawlFolder(Path + "\\" + Files[i].Name, Level + 1); break;
-      }
-
-    }
-  }
-
-  std::vector<FileNode> ListCurrentFolder(std::string Path)
-  {
-    std::vector<FileNode> Files;
-
-    WIN32_FIND_DATA FindFileData;
-    HANDLE hFind;
-    
-    hFind = FindFirstFile(Path.c_str(), &FindFileData);
-    while (hFind != INVALID_HANDLE_VALUE)
-    {
-      if (std::string(FindFileData.cFileName) != "." && std::string(FindFileData.cFileName) != "..")
-      {
-        FileNode Node = FileNode(
-          FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY ? FileNode::FOLDER : FileNode::FILE,
-          FindFileData.cFileName);
-        Files.push_back(Node);
-      }
-        
-      if (!FindNextFile(hFind, &FindFileData))
-      {
-        hFind = INVALID_HANDLE_VALUE;
-      }
-    }
-
-    return Files;
-  }
-
-  virtual void ProcessFile(std::string Name, int Level) {};
-  virtual void ProcessFolder(std::string Name, int Level) {};
-};
-
-class StringReplacer : public FolderCrawler
-{
-public:
-  StringReplacer(std::string A_OldWord, std::string A_NewWord)
-    :OldWord(A_OldWord)
-    ,NewWord(A_NewWord)
-  {
-  }
-  std::string OldWord;
-  std::string NewWord;
-protected:
-  virtual void ProcessFile(std::string Name, int Level)
-  {
-    std::ifstream InFile(Name);
-    std::ofstream OutFile(Name + ".temp");
-    std::string Line;
-    
-    int WordLength = OldWord.size();
-
-    while (getline(InFile, Line))
-    {
-      int Start = std::string::npos;
-      do
-      {
-        Start = Line.find(OldWord);
-        if (Start != std::string::npos)
-          Line.replace(Start, WordLength, NewWord);
-      } while (Start != std::string::npos);
-
-      OutFile << Line << std::endl;
-    }
-
-    InFile.close();
-    OutFile.close();
-
-    remove(Name.c_str());
-    rename((Name + ".temp").c_str(), Name.c_str());
-  };
-
-  virtual void ProcessFolder(std::string Name, int Level)
-  {
-    
-  };
-};
-
-class FolderPrinter : public FolderCrawler
-{
-protected:
-  void PrintName(std::string Name, int Level, bool bIsFile)
-  {
-    std::cout << std::endl;
-    for (int i = 0; i < Level; i++)
-    {
-      std::cout << " ";
-    }
-
-    if (bIsFile)
-      std::cout << "-" << Name.c_str();
-    else
-      std::cout << Name.c_str();
-  }
-
-  virtual void ProcessFile(std::string Name, int Level) 
-  {
-    PrintName(Name, Level, true);
-  };
-
-  virtual void ProcessFolder(std::string Name, int Level) 
-  {
-    PrintName(Name, Level, false);
-  };
-};
-
-template<typename Ret, typename Param0>
-class ICallback
-{
-public:
-  virtual Ret Invoke(Param0 P0) = 0;
-};
-
-template<typename Ret, typename Param0>
-class StaticCallback : public ICallback<Ret, Param0>
-{
-public:
-  typedef Ret(*TFunc)(Param0);  
-
-  StaticCallback(TFunc func) : _func(func) {};
-  ~StaticCallback() { delete _func; }
-
-  virtual Ret Invoke(Param0 P0)
-  {
-    return (*_func)(P0);
-  }
-private:
-  TFunc _func;
-};
-
-template<typename Ret, typename Param0, typename T, typename Method>
-class MethodCallback : public ICallback<Ret, Param0>
-{
-public:
-  typedef Ret(T::*TFunc)(Param0);
-  
-  MethodCallback(T* object, Method method) : _object(object), _func(method) {}
-  ~MethodCallback() { delete _func; }
-
-  virtual Ret Invoke(Param0 P0)
-  {
-    return (_object->*_func)(P0);
-  }
-private:
-  T* _object;
-  TFunc _func;
-};
-
-template<typename Ret, typename Param0>
-class Delegate
-{
-  ICallback<Ret, Param0>* _callback;
-public:
-  Delegate(Ret(*func)(Param0)) : _callback(new StaticCallback<Ret, Param0>(func)) {}
-
-  template <typename T, typename Method>
-  Delegate(T* obj, Method method) : _callback(new MethodCallback<Ret, Param0, T, Method>(obj, method)){}
-
-  ~Delegate() { delete _callback; }
-
-  Ret operator()(Param0 param)
-  {
-    return _callback->Invoke(param);
-  }
-};
-
-enum Event
-{
-  EVENT_STUFF_IS_DONE
-};
-
-class EventManager
-{
-  typedef std::map<Event, Delegate<void, int>*> TListeners;
-public:
-  ~EventManager() 
-  {
-    for (TListeners::iterator i = Listeners.begin(); i != Listeners.end(); ++i)
-      delete i->second;
-  }
-
-  void ReceiveMessage(Event A_Event)
-  {
-    if (Listeners[A_Event])
-    {
-      (*Listeners[A_Event])(1);
-    }
-  }
-
-  void AddListener(Event A_Event, Delegate<void, int>* Delegate)
-  {
-    Listeners[A_Event] = Delegate;
-  }
-
-  TListeners Listeners;
-};
-
-static EventManager* GlobalEventManager;
-
-class Sender
-{
-public:
-  void DoStuff()
-  {
-    std::cout << std::endl << "Sender did stuff";
-    GlobalEventManager->ReceiveMessage(EVENT_STUFF_IS_DONE);
-  }
-};
-
-class Receiver
-{
-public:
-  Receiver()
-  {
-    GlobalEventManager->AddListener(EVENT_STUFF_IS_DONE, new Delegate<void, int>(this, &Receiver::ReactOnDoStuff));
-  }
-
-  void ReactOnDoStuff(int SomeParam)
-  {
-    std::cout << std::endl << "Recevier has reacted";
-  }
-};
-
-int CelsiusFahrenheitConverter()
-{
-  struct
-  {
-    int Lower;
-    int High;
-    int Step;
-  } Temperature;
-
-  std::cout << std::endl << "Lower limit: ";
-  std::cin >> Temperature.Lower;
-
-  std::cout << std::endl << "Higher limit: ";
-  std::cin >> Temperature.High;
-
-  std::cout << std::endl << "Step: ";
-  std::cin >> Temperature.Step;
-
-  for (int Cels = Temperature.Lower; Cels < Temperature.High; Cels += Temperature.Step)
-  {
-    float Fahrenheit = Cels * 9 / 5.0f + 32;
-
-    printf("\n %4.2f  %4.2f", (float)Cels, Fahrenheit);
-  }
-
-  return 1;
-}
-
-#define m_print_out(str, ...) \
-  {     \
-  char output[256]; \
-  sprintf_s(output, str, ##__VA_ARGS__); \
-  std::cout << output; \
-  OutputDebugString(output); \
-  }
-
-void print_out(const char* format, ...)
-{
-  char output[256];
-  va_list args;
-  va_start(args, format);
-  vsprintf_s(output, format, args);
-  va_end(args);
-  std::cout << output;
-  OutputDebugString(output);
-}
-
-const int MEMORY_COUNTER_SIZE = 512;
-
-struct s_memory
-{
-  ~s_memory() { print_out("Memory left: %d\n", in_use); }
-
-  int counter = 0;
-  int in_use = 0;
-  struct
-  {
-    void* ptr;
-    int size;
-  } arr[MEMORY_COUNTER_SIZE];
-} memory;
-
-inline void* operator new(std::size_t sz)
-{  
-  void* ptr = malloc(sz);
-  //print_out("\nNew called: %10d byte allocated at line %d, ", sz, __LINE__);
-  memory.in_use += sz;
-  if (memory.counter < MEMORY_COUNTER_SIZE)
-  {    
-    memory.arr[memory.counter] = { ptr, sz };
-    memory.counter++;
-  }
-  return ptr;
-}
-
-inline void operator delete(void* ptr)
-{
-  int i = 0;
-  for (i = 0; i < MEMORY_COUNTER_SIZE; i++)
-    if (memory.arr[i].ptr == ptr) break;
-  //if (i < MEMORY_COUNTER_SIZE-1)
-  //  print_out("\nDel called: %10d byte released at line %d", memory.arr[i].size, __LINE__);
-  memory.in_use -= memory.arr[i].size;
-  free(ptr);
-}
 
 struct pixel
 {
   float r, g, b;
 };
 
-void make_cube_image(pixel* pixels, int width, int height);
-
-void open_hdri(std::string filename)
+struct SImage
 {
-  int width = 2400;
-  int height = 1200;
+  int width = 0;
+  int height = 0;
 
-  FILE* f;
+  pixel* pixels = nullptr;
 
-  errno_t err = fopen_s(&f, filename.c_str(), "rb");
-  rgbe_header_info header;
+  void open_hdri(const char* filename)
+  {
+    FILE* f;
 
-  RGBE_ReadHeader(f, &width, &height, NULL);
+    errno_t err = fopen_s(&f, filename, "rb");
+    rgbe_header_info header;
 
-  // read pixels
-  float* data = new float[width*height*3];  
-  RGBE_ReadPixels_RLE(f, data, width, height);
-  fclose(f);
+    RGBE_ReadHeader(f, &width, &height, NULL);
 
-  // convert for convenience  
-  pixel* pixels = new pixel[width*height];
-  memcpy(pixels, data, sizeof(float) * 3 * width*height);
-  
-  make_cube_image(pixels, width, height);
-  return;
-}
+    // read pixels
+    float* data = new float[width*height * 3];
+    RGBE_ReadPixels_RLE(f, data, width, height);
+    fclose(f);
+
+    pixels = new pixel[width*height];
+    memcpy(pixels, data, sizeof(float)* 3 * width*height);
+  }
+};
 
 enum class Surface
 {
-	YZ = 0,
-	_YZ,
-	XZ,
-	_XZ,
-	XY,
-	_XY
+	X_P = 0,
+	X_N,
+	Y_P,
+	Y_N,
+	Z_P,
+	Z_N
 };
 
 void assign_xyz(float& x, float& y, float& z, int c1, int c2, int half_edge, Surface surf)
 {
   switch (surf)
   {
-  case Surface::YZ: x = half_edge; y = c1; z = c2; break;
-  case Surface::_YZ: x = -half_edge; y = c1; z = c2; break;
-  case Surface::XZ: x = c1; y = half_edge; z = c2; break;
-  case Surface::_XZ: x = c1; y = -half_edge; z = c2; break;
-  case Surface::XY: x = c1; y = c2; z = half_edge; break;
-  case Surface::_XY: x = c1; y = c2; z = -half_edge; break;
+  case Surface::X_P: x = half_edge; y = c1; z = c2; break;
+  case Surface::X_N: x = -half_edge; y = c1; z = c2; break;
+  case Surface::Y_P: x = c1; y = half_edge; z = c2; break;
+  case Surface::Y_N: x = c1; y = -half_edge; z = c2; break;
+  case Surface::Z_P: x = c1; y = c2; z = half_edge; break;
+  case Surface::Z_N: x = c1; y = c2; z = -half_edge; break;
   }
 }
 
-void make_cube_image(pixel* pixels, int width, int height)
+struct SCube
 {
-  float r = height / 2.f;
-
-  float cube_edge = 2*r / sqrtf(3); 
-
-  int cube_edge_i = round(cube_edge);
-  int half_edge = cube_edge_i / 2;
-
-  int new_width = cube_edge * 4 + 1;
-  int new_height = cube_edge*3;
-  
-  pixel* out_pixels = new pixel[new_width*new_height];
-  
-  float c_x = -cube_edge / 2;
-  float c_y = -cube_edge / 2;
-  float c_z = -cube_edge / 2;
-
-  float M_PI = 3.1415;
-  
-  pixel* edges[6];
-
-  for (int i = 0; i < 6; i++)
+  void make_cube(pixel* pixels, int width, int height, int cube_edge_i, float angle_degrees_z = 0.0f)
   {
-    edges[i] = new pixel[cube_edge_i*cube_edge_i];
+    this->cube_edge_i = cube_edge_i;
 
-    for (int c1 = -half_edge; c1 < half_edge; c1 += 1)
+    float r = height / 2.f;
+
+    float cube_edge = cube_edge_i;
+
+    int half_edge = cube_edge_i / 2;
+
+    float c_x = -cube_edge / 2;
+    float c_y = -cube_edge / 2;
+    float c_z = -cube_edge / 2;
+
+    float M_PI = 3.1415;
+
+    float angle_z = M_PI * angle_degrees_z / 180.f;
+
+    for (int i = 0; i < 6; i++)
     {
-      for (int c2 = -half_edge; c2 < half_edge; c2 += 1)
+      edges[i] = new pixel[cube_edge_i*cube_edge_i];
+
+      for (int c1 = -half_edge; c1 < half_edge; c1 += 1)
       {
-        float x = 0.f;
-        float y = 0.f;
-        float z = 0.f;
-
-        assign_xyz(x, y, z, c1, c2, half_edge, (Surface)i);
-
-        float xyz_sqrt = sqrtf(x*x + y*y + z*z);
-        float s_x = r*x / xyz_sqrt;
-        float s_y = r*y / xyz_sqrt;
-        float s_z = r*z / xyz_sqrt;
-
-        float inclination = atan2f(sqrtf(s_x*s_x + s_y*s_y), s_z);
-        float azimuth = atan2f(s_y, s_x);
-        if (inclination < 0) inclination += 2 * M_PI;
-        if (azimuth     < 0) azimuth += 2 * M_PI;
-
-        int r_x = round(azimuth / (2 * M_PI)*width);
-        int r_y = round(inclination / M_PI*height);
-
-        if (r_x < width && r_x >= 0 && r_y < height && r_y >= 0)
+        for (int c2 = -half_edge; c2 < half_edge; c2 += 1)
         {
+          float x = 0.f;
+          float y = 0.f;
+          float z = 0.f;
+
+          assign_xyz(x, y, z, c1, c2, half_edge, (Surface)i);
+
+          float xyz_sqrt = sqrtf(x*x + y*y + z*z);
+          float s_x = r*x / xyz_sqrt;
+          float s_y = r*y / xyz_sqrt;
+          float s_z = r*z / xyz_sqrt;
+
+          float inclination = atan2f(sqrtf(s_x*s_x + s_y*s_y), s_z);
+          float azimuth = atan2f(s_y, s_x) + angle_z;
+          if (inclination < 0) inclination += 2 * M_PI;
+          if (azimuth     < 0) azimuth += 2 * M_PI;
+          if (inclination >= 2*M_PI) inclination -= 2 * M_PI;
+          if (azimuth     >= 2*M_PI) azimuth -= 2 * M_PI;
+
+          int r_x = round(azimuth / (2 * M_PI)*width);
+          int r_y = round(inclination / M_PI*height);
+
+          if (r_x >= width) r_x -= width;
+          if (r_y >= height) r_y -= height;
+          if (r_x < 0) r_x += width;
+          if (r_y < 0) r_y += height;
+          
           pixel p = pixels[r_x + r_y*width];
           int index = (c1 + half_edge) + cube_edge_i*(c2 + half_edge);
-          if (index < cube_edge_i*cube_edge_i && index >= 0) edges[i][index] = p;
+          if (index < cube_edge_i*cube_edge_i && index >= 0) edges[i][index] = p;          
         }
       }
     }
+
+    flip_x(Surface::X_P);
+    flip_x(Surface::Y_N);
+    flip_x(Surface::Z_P);
   }
-    
+
+  void turn_right(Surface s)
+  {
+    pixel* edge = edges[int(s)];
+    pixel* n_edge = new pixel[cube_edge_i*cube_edge_i];
+    for (int i = 0; i < cube_edge_i; i++)
+    {
+      for (int j = 0; j < cube_edge_i; j++)
+      {
+        n_edge[i + j*cube_edge_i] = edge[j + (cube_edge_i - i - 1)*cube_edge_i];
+      }
+    }
+    memcpy(edge, n_edge, cube_edge_i*cube_edge_i*sizeof(pixel));
+  }
+
+  void flip_x(Surface s)
+  {
+    pixel* edge = edges[int(s)];
+    for (int i = 0; i < cube_edge_i/2; i++)
+    {
+      for (int j = 0; j < cube_edge_i; j++)
+      {
+        std::swap(edge[i + j*cube_edge_i],edge[cube_edge_i - i - 1 + j*cube_edge_i]);
+      }
+    }    
+  }
+
+  pixel* edges[6];
+  int cube_edge_i;
+};
+
+void write_hdri_cross(const char* filename, const pixel** edges, int cube_edge)
+{
+  int width = cube_edge * 4 + 1;
+  int height = cube_edge * 3;
+
+  pixel* out_pixels = new pixel[width*height];
+
   for (int i = 0; i < 6; i++)
   {
     int dx, dy;
     switch (i)
     {
-    case 0: dx = 0            ; dy = cube_edge_i  ; break;
-    case 1: dx = cube_edge_i  ; dy = cube_edge_i  ; break;
-    case 2: dx = cube_edge_i*2; dy = cube_edge_i  ; break;
-    case 3: dx = cube_edge_i*3; dy = cube_edge_i  ; break;
-    case 4: dx = cube_edge_i  ; dy = cube_edge_i*2; break;
-    case 5: dx = cube_edge_i  ; dy = 0            ; break;
+    case 0: dx = 0; dy = cube_edge; break;
+    case 1: dx = cube_edge; dy = cube_edge; break;
+    case 2: dx = cube_edge * 2; dy = cube_edge; break;
+    case 3: dx = cube_edge * 3; dy = cube_edge; break;
+    case 4: dx = cube_edge; dy = cube_edge * 2; break;
+    case 5: dx = cube_edge; dy = 0; break;
     }
-    for (int x = 0; x < cube_edge_i; x++)
+    for (int x = 0; x < cube_edge; x++)
     {
-      for (int y = 0; y < cube_edge_i; y++)
+      for (int y = 0; y < cube_edge; y++)
       {
-        int index1 = x + dx + new_width*(new_height - y - dy - 1);
-        int index2 = x + cube_edge_i*y;
-        if(index1 >= 0) out_pixels[index1] = edges[i][index2];
-      }      
+        int index1 = x + dx + width*(height - y - dy - 1);
+        int index2 = x + cube_edge*y;
+        if (index1 >= 0) out_pixels[index1] = edges[i][index2];
+      }
     }
   }
 
-  FILE* f;
+  {
+    FILE* f;
 
-  //std::string filename = "D:\\Stuff\\hdri_cubemap_converter\\output.hdr";
-  std::string filename = "E:\\Work\\hdr_cubemap\\images\\output.hdr";
-  errno_t err = fopen_s(&f, filename.c_str(), "wb");
+    //std::string filename = "D:\\Stuff\\hdri_cubemap_converter\\output.hdr";
+    //const char* filename = "E:\\Work\\hdr_cubemap\\images\\output.hdr";
+    errno_t err = fopen_s(&f, filename, "wb");
 
-  rgbe_header_info header;
-  header.exposure = 1.0f;
-  strcpy_s<16>(header.programtype, "RADIANCE");
-  header.valid = RGBE_VALID_PROGRAMTYPE | RGBE_VALID_EXPOSURE;
-  RGBE_WriteHeader(f, new_width, new_height, &header);
+    rgbe_header_info header;
+    header.exposure = 1.0f;
+    strcpy_s<16>(header.programtype, "RADIANCE");
+    header.valid = RGBE_VALID_PROGRAMTYPE | RGBE_VALID_EXPOSURE;
+    RGBE_WriteHeader(f, width, height, &header);
 
-  float* data = new float[new_width*new_height * 3];
-  memcpy(data, out_pixels, sizeof(float) * 3 * new_width*new_height);
-  RGBE_WritePixels_RLE(f, data, new_width, new_height);
+    float* data = new float[width*height * 3];
+    memcpy(data, out_pixels, sizeof(float)* 3 * width*height);
+    RGBE_WritePixels_RLE(f, data, width, height);
 
-  fclose(f);
+    fclose(f);
+  }
 }
 
-void open_dds(std::string filename)
+void write_dds_cubemap(const char* filename, pixel** edges, int cube_edge_i)
 {
   FILE* f;
 
-  errno_t err = fopen_s(&f, filename.c_str(), "rb");
+  errno_t err = fopen_s(&f, "E:\\Work\\hdr_cubemap\\images\\un_Papermill_Ruins_E.dds", "rb");
 
+  DWORD magic_number;
   DDS_HEADER header;
+  size_t bytes = fread(&magic_number, sizeof(DWORD), 1, f);
   read_dds_header(f, &header);
+  header.dwMipMapCount = 0;
+  header.dwWidth = cube_edge_i;
+  header.dwHeight = cube_edge_i;
 
   fclose(f);
+
+  //std::string filename = "D:\\Stuff\\hdri_cubemap_converter\\output.hdr";
+  //const char* filename = "E:\\Work\\hdr_cubemap\\images\\output.dds";
+  err = fopen_s(&f, filename, "wb");
+
+  fwrite(&magic_number, sizeof(DWORD), 1, f);
+  fwrite(&header, sizeof(DDS_HEADER), 1, f);
+
+  unsigned char* out_data = new unsigned char[cube_edge_i*cube_edge_i * 4];
+  for (int i = 0; i < 6; i++)
+  {
+    for (int j = 0; j < cube_edge_i*cube_edge_i; j++)
+    {
+      int index = cube_edge_i*cube_edge_i - 1 - j;
+      out_data[j * 4 + 0] = edges[i][index].b >= 1.f ? 255 : edges[i][index].b * 255;
+      out_data[j * 4 + 1] = edges[i][index].g >= 1.f ? 255 : edges[i][index].g * 255;
+      out_data[j * 4 + 2] = edges[i][index].r >= 1.f ? 255 : edges[i][index].r * 255;
+      out_data[j * 4 + 3] = 255;
+    }
+    fwrite(out_data, sizeof(unsigned char), cube_edge_i*cube_edge_i * 4, f);
+  }
+
+  fclose(f);  
 }
 
+struct Singletone
+{
+  SImage image;
+  SCube cube;
+} Singletone;
+
+extern "C" __declspec(dllexport)
+void open_hdri(const char* filename)
+{
+  Singletone.image.open_hdri(filename);
+}
+
+extern "C" __declspec(dllexport)
+void make_cube(int cube_edge_i)
+{
+  Singletone.cube.make_cube(
+    Singletone.image.pixels,
+    Singletone.image.width,
+    Singletone.image.height,
+    cube_edge_i);
+}
+
+extern "C" __declspec(dllexport)
+void save_cube_dds(const char* filename, int cube_edge_i)
+{
+  Singletone.cube.turn_right(Surface::X_P);
+  Singletone.cube.turn_right(Surface::X_P);
+  Singletone.cube.turn_right(Surface::X_P);
+  Singletone.cube.turn_right(Surface::X_N);
+  Singletone.cube.turn_right(Surface::Y_P);
+  Singletone.cube.turn_right(Surface::Y_P);
+
+  write_dds_cubemap(filename, Singletone.cube.edges, cube_edge_i);
+}
+
+//{
+//  FILE* f;
+//
+//  errno_t err = fopen_s(&f, filename, "rb");
+//
+//  DDS_HEADER header;
+//  read_dds_header(f, &header);
+//
+//  pixel* pixels = new pixel[header.dwWidth*header.dwHeight];
+//  unsigned char* data = new unsigned char[header.dwWidth*header.dwHeight*4];
+//  unsigned char* data_ = new unsigned char[header.dwWidth*header.dwHeight * 4];
+//
+//  fread(data, 1, header.dwWidth*header.dwHeight*4, f);
+//  fread(data_, 1, header.dwWidth*header.dwHeight, f);
+//
+//  float* out_data = new float[header.dwWidth*header.dwHeight * 3];
+//  float* out_data_ = new float[header.dwWidth*header.dwHeight * 3/4];
+//  for (int i = 0; i < header.dwWidth*header.dwHeight; i++)
+//  {
+//    out_data[i * 3] =     data[i * 4 + 2]/255.f;
+//    out_data[i * 3 + 1] = data[i * 4 + 1]/255.f;
+//    out_data[i * 3 + 2] = data[i * 4 + 0]/255.f;
+//  }
+//
+//  for (int i = 0; i < header.dwWidth*header.dwHeight/4; i++)
+//  {
+//    out_data_[i * 3] =     data_[i * 4 + 2] / 255.f;
+//    out_data_[i * 3 + 1] = data_[i * 4 + 1] / 255.f;
+//    out_data_[i * 3 + 2] = data_[i * 4 + 0] / 255.f;
+//  }
+//
+//  {
+//    const char* filename_o = "E:\\Work\\hdr_cubemap\\images\\output.hdr";
+//    err = fopen_s(&f, filename_o, "wb");
+//
+//    rgbe_header_info rgbe_header;
+//    rgbe_header.exposure = 1.0f;
+//    strcpy_s<16>(rgbe_header.programtype, "RADIANCE");
+//    rgbe_header.valid = RGBE_VALID_PROGRAMTYPE | RGBE_VALID_EXPOSURE;
+//    RGBE_WriteHeader(f, header.dwWidth, header.dwHeight, &rgbe_header);
+//
+//    RGBE_WritePixels_RLE(f, out_data, header.dwWidth, header.dwHeight);
+//    fclose(f);
+//  }
+//
+//  const char* filename_o = "E:\\Work\\hdr_cubemap\\images\\output_.hdr";
+//  err = fopen_s(&f, filename_o, "wb");
+//
+//  rgbe_header_info rgbe_header;
+//  rgbe_header.exposure = 1.0f;
+//  strcpy_s<16>(rgbe_header.programtype, "RADIANCE");
+//  rgbe_header.valid = RGBE_VALID_PROGRAMTYPE | RGBE_VALID_EXPOSURE;
+//  RGBE_WriteHeader(f, header.dwWidth/2, header.dwHeight/2, &rgbe_header);
+//
+//  RGBE_WritePixels_RLE(f, out_data_, header.dwWidth/2, header.dwHeight/2);  
+//}
+
 int main()
-{ 
-  //FolderCrawler* fc = new StringReplacer("RangeAttackAction", "CloseCombatAction");
-  //fc->Crawl("D:\\Replacer");
-  
-  //GlobalEventManager = new EventManager();
-  //Sender s = Sender();
-  //Receiver r = Receiver();
-  //s.DoStuff();
-  ////std::regex Exp;
-  //
-  //delete GlobalEventManager;
-  //Exp.assign("..[a-z][a-z][a-z][a-z]");
-  //std::cout << std::endl << std::regex_match("* zxcv", Exp);
-  //std::cout << std::endl << std::regex_match("", Exp);
+{   
+  SImage image;
+  //open_dds("E:\\Work\\hdr_cubemap\\images\\un_Papermill_Ruins_E.dds");
 
-  open_dds("E:\\Work\\hdr_cubemap\\images\\un_Papermill_Ruins_E.dds");
+  image.open_hdri("E:\\Work\\hdr_cubemap\\images\\uffizi-large.hdr");
 
-  //open_hdri("E:\\Work\\hdr_cubemap\\images\\uffizi-large.hdr");
+  SCube cube;
+  cube.make_cube(image.pixels, image.width, image.height, 1024, 45);
+    
+  cube.turn_right(Surface::X_P);
+  cube.turn_right(Surface::X_P);
+  cube.turn_right(Surface::X_P);
+  cube.turn_right(Surface::X_N);
+  cube.turn_right(Surface::Y_P);
+  cube.turn_right(Surface::Y_P);
+
+
+  write_dds_cubemap("E:\\Work\\hdr_cubemap\\images\\output.dds", cube.edges, 1024);
+
   //open_hdri("E:\\Work\\hdr_cubemap\\images\\grace-new.hdr");
   //open_hdri("E:\\Work\\hdr_cubemap\\images\\glacier.hdr");
   //open_hdri("D:\\Stuff\\hdri_cubemap_converter\\HDR_110_Tunnel_Ref.hdr");
