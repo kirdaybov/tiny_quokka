@@ -123,6 +123,13 @@ struct SCube
     flip_x(Surface::X_P);
     flip_x(Surface::Y_N);
     flip_x(Surface::Z_P);
+
+    flip_y(Surface::X_P);
+    flip_y(Surface::X_N);
+    flip_y(Surface::Y_P);
+    flip_y(Surface::Y_N);
+    flip_y(Surface::Z_P);
+    flip_y(Surface::Z_N);
   }
 
   void turn_right(Surface s)
@@ -149,6 +156,18 @@ struct SCube
         std::swap(edge[i + j*cube_edge_i],edge[cube_edge_i - i - 1 + j*cube_edge_i]);
       }
     }    
+  }
+
+  void flip_y(Surface s)
+  {
+    pixel* edge = edges[int(s)];
+    for (int i = 0; i < cube_edge_i; i++)
+    {
+      for (int j = 0; j < cube_edge_i/2; j++)
+      {
+        std::swap(edge[i + j*cube_edge_i], edge[i + (cube_edge_i - j - 1)*cube_edge_i]);
+      }
+    }
   }
 
   pixel* edges[6];
@@ -234,10 +253,9 @@ void write_dds_cubemap(const char* filename, pixel** edges, int cube_edge_i)
   {
     for (int j = 0; j < cube_edge_i*cube_edge_i; j++)
     {
-      int index = cube_edge_i*cube_edge_i - 1 - j;
-      out_data[j * 4 + 0] = edges[i][index].b >= 1.f ? 255 : edges[i][index].b * 255;
-      out_data[j * 4 + 1] = edges[i][index].g >= 1.f ? 255 : edges[i][index].g * 255;
-      out_data[j * 4 + 2] = edges[i][index].r >= 1.f ? 255 : edges[i][index].r * 255;
+      out_data[j * 4 + 0] = edges[i][j].b >= 1.f ? 255 : edges[i][j].b * 255;
+      out_data[j * 4 + 1] = edges[i][j].g >= 1.f ? 255 : edges[i][j].g * 255;
+      out_data[j * 4 + 2] = edges[i][j].r >= 1.f ? 255 : edges[i][j].r * 255;
       out_data[j * 4 + 3] = 255;
     }
     fwrite(out_data, sizeof(unsigned char), cube_edge_i*cube_edge_i * 4, f);
@@ -259,13 +277,13 @@ void open_hdri(const char* filename)
 }
 
 extern "C" __declspec(dllexport)
-void make_cube(int cube_edge_i)
+void make_cube(int cube_edge_i, float degrees)
 {
   Singletone.cube.make_cube(
     Singletone.image.pixels,
     Singletone.image.width,
     Singletone.image.height,
-    cube_edge_i);
+    cube_edge_i, degrees);
 }
 
 extern "C" __declspec(dllexport)
@@ -280,6 +298,14 @@ void save_cube_dds(const char* filename, int cube_edge_i)
 
   write_dds_cubemap(filename, Singletone.cube.edges, cube_edge_i);
 }
+
+extern "C" __declspec(dllexport) int get_width()  { return Singletone.image.width; }
+extern "C" __declspec(dllexport) int get_height() { return Singletone.image.height; }
+
+extern "C" __declspec(dllexport) pixel* get_pixels() { return Singletone.image.pixels; }
+extern "C" __declspec(dllexport) pixel* get_edge(int i) { return Singletone.cube.edges[i]; }
+extern "C" __declspec(dllexport) int get_float_size() { return sizeof(float); }
+
 
 //{
 //  FILE* f;
