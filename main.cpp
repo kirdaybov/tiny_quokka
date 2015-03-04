@@ -7,8 +7,22 @@
 
 struct pixel
 {
-  float r, g, b;
+  float r = 0, g = 0, b = 0;
+  pixel() : r(0), g(0), b(0) {}
+  pixel(float ar, float ag, float ab) : r(ar), g(ag), b(ab) {}
+
+  pixel operator/(float v)
+  {
+    return pixel(r/v, g/v, b/v);
+  }
 };
+
+pixel operator+(pixel& a, pixel& b)
+{
+  return pixel(a.r + b.r, a.g + b.g, a.b + b.b);
+}
+
+
 
 struct SImage
 {
@@ -45,6 +59,19 @@ enum class Surface
 	Z_P,
 	Z_N
 };
+
+void turn_right(pixel* edge, int cube_edge_i)
+{
+  pixel* n_edge = new pixel[cube_edge_i*cube_edge_i];
+  for (int i = 0; i < cube_edge_i; i++)
+  {
+    for (int j = 0; j < cube_edge_i; j++)
+    {
+      n_edge[i + j*cube_edge_i] = edge[j + (cube_edge_i - i - 1)*cube_edge_i];
+    }
+  }
+  memcpy(edge, n_edge, cube_edge_i*cube_edge_i*sizeof(pixel));
+}
 
 void assign_xyz(float& x, float& y, float& z, int c1, int c2, int half_edge, Surface surf)
 {
@@ -134,16 +161,7 @@ struct SCube
 
   void turn_right(Surface s)
   {
-    pixel* edge = edges[int(s)];
-    pixel* n_edge = new pixel[cube_edge_i*cube_edge_i];
-    for (int i = 0; i < cube_edge_i; i++)
-    {
-      for (int j = 0; j < cube_edge_i; j++)
-      {
-        n_edge[i + j*cube_edge_i] = edge[j + (cube_edge_i - i - 1)*cube_edge_i];
-      }
-    }
-    memcpy(edge, n_edge, cube_edge_i*cube_edge_i*sizeof(pixel));
+    ::turn_right(edges[(int)s], cube_edge_i);
   }
 
   void flip_x(Surface s)
@@ -168,6 +186,118 @@ struct SCube
         std::swap(edge[i + j*cube_edge_i], edge[i + (cube_edge_i - j - 1)*cube_edge_i]);
       }
     }
+  }
+
+  void assign_borders(pixel* top, pixel* bottom, pixel* left, pixel* right, Surface k)
+  {
+    switch (k)
+    {
+    case  Surface::X_P: 
+      for (int i = 0; i < cube_edge_i; i++)
+      {
+        left[i] = edges[int(Surface::Y_P)][cube_edge_i*(i + 1) - 1];
+        right[i] = edges[int(Surface::Y_N)][cube_edge_i*i];
+        top[i] = edges[int(Surface::Z_P)][cube_edge_i*i];
+        bottom[i] = edges[int(Surface::Z_N)][cube_edge_i*(i + 1) - 1];        
+      } 
+      break;
+    case  Surface::X_N:
+      for (int i = 0; i < cube_edge_i; i++)
+      {
+        left[i] = edges[int(Surface::Y_N)][cube_edge_i*(i + 1) - 1];
+        right[i] = edges[int(Surface::Y_P)][cube_edge_i*i];
+        top[cube_edge_i - i - 1] = edges[int(Surface::Z_P)][cube_edge_i*(i + 1) - 1];
+        bottom[cube_edge_i - i - 1] = edges[int(Surface::Z_N)][cube_edge_i*i];        
+      }      
+      break;
+    case  Surface::Y_P: 
+      for (int i = 0; i < cube_edge_i; i++)
+      {
+        left[i] = edges[int(Surface::X_N)][cube_edge_i*(i + 1) - 1];
+        right[i] = edges[int(Surface::X_P)][cube_edge_i*i];
+        top[cube_edge_i - i - 1] = edges[int(Surface::Z_P)][i];
+        bottom[i] = edges[int(Surface::Z_N)][i];        
+      }
+      break;
+    case  Surface::Y_N: 
+      for (int i = 0; i < cube_edge_i; i++)
+      {
+        left[i] = edges[int(Surface::X_P)][cube_edge_i*(i + 1) - 1];
+        right[i] = edges[int(Surface::X_N)][cube_edge_i*i];
+        top[i] = edges[int(Surface::Z_P)][cube_edge_i*(cube_edge_i - 1) + i];
+        bottom[cube_edge_i - i - 1] = edges[int(Surface::Z_N)][cube_edge_i*(cube_edge_i - 1) + i];        
+      }
+      break;
+    case  Surface::Z_P:
+      for (int i = 0; i < cube_edge_i; i++)
+      {
+        left[i] = edges[int(Surface::X_P)][i];
+        right[cube_edge_i - i - 1] = edges[int(Surface::X_N)][i];
+        top[cube_edge_i - i - 1] = edges[int(Surface::Y_P)][i];
+        bottom[i] = edges[int(Surface::Y_N)][i];        
+      }
+      break;
+    case  Surface::Z_N: 
+      for (int i = 0; i < cube_edge_i; i++)
+      {
+        left[cube_edge_i - i - 1] = edges[int(Surface::X_N)][cube_edge_i*(cube_edge_i - 1) + i];
+        right[i] = edges[int(Surface::X_P)][cube_edge_i*(cube_edge_i - 1) + i];
+        top[i] = edges[int(Surface::Y_P)][cube_edge_i*(cube_edge_i - 1) + i];
+        bottom[cube_edge_i - i - 1] = edges[int(Surface::Y_N)][cube_edge_i*(cube_edge_i - 1) + i];        
+      }
+      break;
+    }    
+  }
+
+  void blur()
+  {
+    pixel* top = new pixel[cube_edge_i];
+    pixel* bottom = new pixel[cube_edge_i];
+    pixel* left = new pixel[cube_edge_i];
+    pixel* right = new pixel[cube_edge_i];
+
+    pixel* new_edges[6];
+
+    for (int k = 0; k < 1; k++)
+    {
+      assign_borders(top, bottom, left, right, (Surface)k);
+
+      new_edges[k] = new pixel[cube_edge_i*cube_edge_i];
+      pixel* new_edge = new pixel[(cube_edge_i + 2)*(cube_edge_i + 2)];
+
+      for (int i = 1; i < cube_edge_i + 1; i++)
+      for (int j = 1; j < cube_edge_i + 1; j++)
+        new_edge[i + j*(cube_edge_i + 2)] = edges[k][i - 1 + (j - 1)*cube_edge_i];
+
+      for (int i = 1; i < cube_edge_i + 1; i++)
+      {
+        new_edge[i] = top[i - 1];
+        new_edge[i*(cube_edge_i + 2)] = left[i - 1];
+        new_edge[(i+1)*(cube_edge_i + 2) - 1] = right[i - 1];
+        new_edge[(cube_edge_i + 2)*(cube_edge_i + 1) + i] = bottom[i - 1];
+      }
+
+      new_edge[0] = (new_edge[1] + new_edge[cube_edge_i + 2]) / 2;
+      new_edge[cube_edge_i + 1] = (new_edge[cube_edge_i - 1] + new_edge[2*(cube_edge_i + 2) - 1]) / 2;
+      new_edge[(cube_edge_i + 2)*(cube_edge_i + 1)] = (new_edge[(cube_edge_i + 2)*(cube_edge_i + 1) + 1] + new_edge[cube_edge_i * (cube_edge_i + 2)]) / 2;
+      new_edge[(cube_edge_i + 2)*(cube_edge_i + 2) - 1] = (new_edge[(cube_edge_i + 2)*(cube_edge_i + 2) - 2] + new_edge[(cube_edge_i + 2)*(cube_edge_i + 1)]) / 2;
+
+      for (int i = 1; i < cube_edge_i + 1; i++)
+        for (int j = 1; j < cube_edge_i + 1; j++)
+        {
+          pixel sum = pixel();
+          for (int ii = -1; ii < 2; ii++)
+          for (int jj = -1; jj < 2; jj++)
+            sum = sum + new_edge[(i + ii) + (j + jj)*cube_edge_i];
+          new_edge[i + j*cube_edge_i] = sum / 9;
+        }
+
+      for (int i = 1; i < cube_edge_i + 1; i++)
+      for (int j = 1; j < cube_edge_i + 1; j++)
+        new_edges[k][i - 1 + (j - 1)*cube_edge_i] = new_edge[i + j*(cube_edge_i + 2)];
+    }
+    for (int i = 0; i < 1; i++)
+      memcpy(edges[i], new_edges[i], sizeof(pixel)*cube_edge_i*cube_edge_i);
   }
 
   pixel* edges[6];
@@ -304,7 +434,20 @@ extern "C" __declspec(dllexport) int get_height() { return Singletone.image.heig
 
 extern "C" __declspec(dllexport) pixel* get_pixels() { return Singletone.image.pixels; }
 extern "C" __declspec(dllexport) pixel* get_edge(int i) { return Singletone.cube.edges[i]; }
+extern "C" __declspec(dllexport) pixel* get_edge_t(int i, int turns)
+{
+  int cube_edge_i = Singletone.cube.cube_edge_i;
+
+  pixel* edge = new pixel[cube_edge_i*cube_edge_i];
+  memcpy(edge, Singletone.cube.edges[i], sizeof(pixel)*cube_edge_i*cube_edge_i);
+  for (int i = 0; i < turns; i++)
+    turn_right(edge, cube_edge_i);
+
+  return edge;
+}
+
 extern "C" __declspec(dllexport) int get_float_size() { return sizeof(float); }
+extern "C" __declspec(dllexport) void blur() { Singletone.cube.blur(); }
 
 
 //{
@@ -369,20 +512,22 @@ int main()
   SImage image;
   //open_dds("E:\\Work\\hdr_cubemap\\images\\un_Papermill_Ruins_E.dds");
 
-  image.open_hdri("E:\\Work\\hdr_cubemap\\images\\uffizi-large.hdr");
+  image.open_hdri("E:\\Work\\hdr_cubemap\\images\\glacier.hdr");
 
   SCube cube;
-  cube.make_cube(image.pixels, image.width, image.height, 1024, 45);
+  cube.make_cube(image.pixels, image.width, image.height, 256, 0);
+
+  cube.blur();
     
-  cube.turn_right(Surface::X_P);
-  cube.turn_right(Surface::X_P);
-  cube.turn_right(Surface::X_P);
-  cube.turn_right(Surface::X_N);
-  cube.turn_right(Surface::Y_P);
-  cube.turn_right(Surface::Y_P);
-
-
-  write_dds_cubemap("E:\\Work\\hdr_cubemap\\images\\output.dds", cube.edges, 1024);
+  //cube.turn_right(Surface::X_P);
+  //cube.turn_right(Surface::X_P);
+  //cube.turn_right(Surface::X_P);
+  //cube.turn_right(Surface::X_N);
+  //cube.turn_right(Surface::Y_P);
+  //cube.turn_right(Surface::Y_P);
+  //
+  //
+  //write_dds_cubemap("E:\\Work\\hdr_cubemap\\images\\output.dds", cube.edges, 1024);
 
   //open_hdri("E:\\Work\\hdr_cubemap\\images\\grace-new.hdr");
   //open_hdri("E:\\Work\\hdr_cubemap\\images\\glacier.hdr");
