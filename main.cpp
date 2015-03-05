@@ -1,6 +1,9 @@
 
 #include <algorithm>
 #include <math.h>
+#include <iostream>
+#include <fstream>
+
 
 #include "rgbe.h"
 #include "dds.h"
@@ -249,7 +252,7 @@ struct SCube
     }    
   }
 
-  void blur()
+  void blur(int power)
   {
     pixel* top = new pixel[cube_edge_i];
     pixel* bottom = new pixel[cube_edge_i];
@@ -257,47 +260,50 @@ struct SCube
     pixel* right = new pixel[cube_edge_i];
 
     pixel* new_edges[6];
-
-    for (int k = 0; k < 1; k++)
-    {
-      assign_borders(top, bottom, left, right, (Surface)k);
-
-      new_edges[k] = new pixel[cube_edge_i*cube_edge_i];
-      pixel* new_edge = new pixel[(cube_edge_i + 2)*(cube_edge_i + 2)];
-
-      for (int i = 1; i < cube_edge_i + 1; i++)
-      for (int j = 1; j < cube_edge_i + 1; j++)
-        new_edge[i + j*(cube_edge_i + 2)] = edges[k][i - 1 + (j - 1)*cube_edge_i];
-
-      for (int i = 1; i < cube_edge_i + 1; i++)
+    for (int i = 0; i < 6; i++) new_edges[i] = new pixel[cube_edge_i*cube_edge_i];
+    
+    for (int p = 0; p < power; p++)
+    {      
+      for (int k = 0; k < 6; k++)
       {
-        new_edge[i] = top[i - 1];
-        new_edge[i*(cube_edge_i + 2)] = left[i - 1];
-        new_edge[(i+1)*(cube_edge_i + 2) - 1] = right[i - 1];
-        new_edge[(cube_edge_i + 2)*(cube_edge_i + 1) + i] = bottom[i - 1];
-      }
+        assign_borders(top, bottom, left, right, (Surface)k);
 
-      new_edge[0] = (new_edge[1] + new_edge[cube_edge_i + 2]) / 2;
-      new_edge[cube_edge_i + 1] = (new_edge[cube_edge_i - 1] + new_edge[2*(cube_edge_i + 2) - 1]) / 2;
-      new_edge[(cube_edge_i + 2)*(cube_edge_i + 1)] = (new_edge[(cube_edge_i + 2)*(cube_edge_i + 1) + 1] + new_edge[cube_edge_i * (cube_edge_i + 2)]) / 2;
-      new_edge[(cube_edge_i + 2)*(cube_edge_i + 2) - 1] = (new_edge[(cube_edge_i + 2)*(cube_edge_i + 2) - 2] + new_edge[(cube_edge_i + 2)*(cube_edge_i + 1)]) / 2;
+        pixel* ext_edge = new pixel[(cube_edge_i + 2)*(cube_edge_i + 2)];
 
-      for (int i = 1; i < cube_edge_i + 1; i++)
+        //TODO: померить разницу
+        //for (int i = 1; i < cube_edge_i + 1; i++)
+        //  for (int j = 1; j < cube_edge_i + 1; j++)
+        //    ext_edge[i + j*(cube_edge_i + 2)] = edges[k][i - 1 + (j - 1)*cube_edge_i];
+  
         for (int j = 1; j < cube_edge_i + 1; j++)
+          memcpy(&ext_edge[j*(cube_edge_i + 2) + 1], &edges[k][(j - 1)*cube_edge_i], sizeof(pixel)*cube_edge_i);
+
+        for (int i = 1; i < cube_edge_i + 1; i++)
         {
-          pixel sum = pixel();
-          for (int ii = -1; ii < 2; ii++)
-          for (int jj = -1; jj < 2; jj++)
-            sum = sum + new_edge[(i + ii) + (j + jj)*cube_edge_i];
-          new_edge[i + j*cube_edge_i] = sum / 9;
+          ext_edge[i] = top[i - 1];
+          ext_edge[i*(cube_edge_i + 2)] = left[i - 1];
+          ext_edge[(i + 1)*(cube_edge_i + 2) - 1] = right[i - 1];
+          ext_edge[(cube_edge_i + 2)*(cube_edge_i + 1) + i] = bottom[i - 1];
         }
 
-      for (int i = 1; i < cube_edge_i + 1; i++)
-      for (int j = 1; j < cube_edge_i + 1; j++)
-        new_edges[k][i - 1 + (j - 1)*cube_edge_i] = new_edge[i + j*(cube_edge_i + 2)];
+        ext_edge[0] = (ext_edge[1] + ext_edge[cube_edge_i + 2]) / 2;
+        ext_edge[cube_edge_i + 1] = (ext_edge[cube_edge_i - 1] + ext_edge[2 * (cube_edge_i + 2) - 1]) / 2;
+        ext_edge[(cube_edge_i + 2)*(cube_edge_i + 1)] = (ext_edge[(cube_edge_i + 2)*(cube_edge_i + 1) + 1] + ext_edge[cube_edge_i * (cube_edge_i + 2)]) / 2;
+        ext_edge[(cube_edge_i + 2)*(cube_edge_i + 2) - 1] = (ext_edge[(cube_edge_i + 2)*(cube_edge_i + 2) - 2] + ext_edge[(cube_edge_i + 2)*(cube_edge_i + 1)]) / 2;
+
+        for (int i = 1; i < cube_edge_i + 1; i++)
+          for (int j = 1; j < cube_edge_i + 1; j++)
+          {
+            pixel sum = pixel();
+            for (int ii = -1; ii < 2; ii++)
+              for (int jj = -1; jj < 2; jj++)
+                sum = sum + ext_edge[(i + ii) + (j + jj)*(cube_edge_i + 2)];
+            new_edges[k][i - 1 + (j - 1)*cube_edge_i] = sum / 9;
+          }
+      }
+      for (int i = 0; i < 6; i++)
+        memcpy(edges[i], new_edges[i], sizeof(pixel)*cube_edge_i*cube_edge_i);
     }
-    for (int i = 0; i < 1; i++)
-      memcpy(edges[i], new_edges[i], sizeof(pixel)*cube_edge_i*cube_edge_i);
   }
 
   pixel* edges[6];
@@ -359,7 +365,8 @@ void write_dds_cubemap(const char* filename, pixel** edges, int cube_edge_i)
 {
   FILE* f;
 
-  errno_t err = fopen_s(&f, "E:\\Work\\hdr_cubemap\\images\\un_Papermill_Ruins_E.dds", "rb");
+  //errno_t err = fopen_s(&f, "E:\\Work\\hdr_cubemap\\images\\un_Papermill_Ruins_E.dds", "rb");
+  errno_t err = fopen_s(&f, "D:\\Stuff\\hdri_cubemap_converter\\HDR_110_Tunnel_Bg.dds", "rb");
 
   DWORD magic_number;
   DDS_HEADER header;
@@ -370,6 +377,19 @@ void write_dds_cubemap(const char* filename, pixel** edges, int cube_edge_i)
   header.dwHeight = cube_edge_i;
 
   fclose(f);
+
+  std::ofstream headerfile;
+  headerfile.open("D:\\Stuff\\hdri_cubemap_converter\\dds_header.txt");
+  headerfile << magic_number << std::endl;
+  for (int i = 0; i < sizeof(header) / sizeof(DWORD); i++)
+  {
+    DWORD line; memcpy(&line, (DWORD*)&header + i, sizeof(DWORD));
+    headerfile << line << std::endl;
+  }
+
+  headerfile.close();
+
+
 
   //std::string filename = "D:\\Stuff\\hdri_cubemap_converter\\output.hdr";
   //const char* filename = "E:\\Work\\hdr_cubemap\\images\\output.dds";
@@ -447,7 +467,7 @@ extern "C" __declspec(dllexport) pixel* get_edge_t(int i, int turns)
 }
 
 extern "C" __declspec(dllexport) int get_float_size() { return sizeof(float); }
-extern "C" __declspec(dllexport) void blur() { Singletone.cube.blur(); }
+extern "C" __declspec(dllexport) void blur(int power) { Singletone.cube.blur(power); }
 
 
 //{
@@ -512,12 +532,12 @@ int main()
   SImage image;
   //open_dds("E:\\Work\\hdr_cubemap\\images\\un_Papermill_Ruins_E.dds");
 
-  image.open_hdri("E:\\Work\\hdr_cubemap\\images\\glacier.hdr");
+  image.open_hdri("D:\\Stuff\\hdri_cubemap_converter\\glacier.hdr");
 
   SCube cube;
   cube.make_cube(image.pixels, image.width, image.height, 256, 0);
 
-  cube.blur();
+  //cube.blur(30);
     
   //cube.turn_right(Surface::X_P);
   //cube.turn_right(Surface::X_P);
@@ -528,6 +548,7 @@ int main()
   //
   //
   //write_dds_cubemap("E:\\Work\\hdr_cubemap\\images\\output.dds", cube.edges, 1024);
+  write_dds_cubemap("D:\\Stuff\\hdri_cubemap_converter\\output.dds", cube.edges, 256);
 
   //open_hdri("E:\\Work\\hdr_cubemap\\images\\grace-new.hdr");
   //open_hdri("E:\\Work\\hdr_cubemap\\images\\glacier.hdr");
