@@ -4,9 +4,20 @@
 #include <iostream>
 #include <fstream>
 
+#ifdef _DEBUG
+#include "ConsoleWindow.h"
+#include "MemoryCounter.h"
+#endif
 
 #include "rgbe.h"
 #include "dds.h"
+#include "big_quokka.h"
+
+namespace quokka
+{
+  Profiler* Profiler::Instance = new Profiler();
+  Profiler* GProfiler() { return Profiler::GetInstance(); }
+}
 
 struct pixel
 {
@@ -32,10 +43,14 @@ struct SImage
   int width = 0;
   int height = 0;
 
+  ~SImage() {}
+
   pixel* pixels = nullptr;
 
   void open_hdri(const char* filename)
   {
+    if (pixels) delete[] pixels;
+
     FILE* f;
 
     errno_t err = fopen_s(&f, filename, "rb");
@@ -50,6 +65,8 @@ struct SImage
 
     pixels = new pixel[width*height];
     memcpy(pixels, data, sizeof(float)* 3 * width*height);
+
+    delete[] data;
   }
 };
 
@@ -74,6 +91,7 @@ void turn_right(pixel* edge, int cube_edge_i)
     }
   }
   memcpy(edge, n_edge, cube_edge_i*cube_edge_i*sizeof(pixel));
+  delete[] n_edge;
 }
 
 void assign_xyz(float& x, float& y, float& z, int c1, int c2, int half_edge, Surface surf)
@@ -91,8 +109,21 @@ void assign_xyz(float& x, float& y, float& z, int c1, int c2, int half_edge, Sur
 
 struct SCube
 {
+  ~SCube() { clear_edges(); }
+
+  void clear_edges()
+  {
+    for (int i = 0; i < 6; i++)
+    {
+      if (edges[i]) delete[] edges[i];
+      if (blurred_edges[i]) delete[] blurred_edges[i];
+    }
+  }
+
   void make_cube(pixel* pixels, int width, int height, int cube_edge_i, float angle_degrees_z = 0.0f)
   {
+    clear_edges();
+
     this->cube_edge_i = cube_edge_i;
 
     float r = height / 2.f;
@@ -112,6 +143,7 @@ struct SCube
     for (int i = 0; i < 6; i++)
     {
       edges[i] = new pixel[cube_edge_i*cube_edge_i];
+      blurred_edges[i] = new pixel[cube_edge_i*cube_edge_i];
 
       for (int c1 = -half_edge; c1 < half_edge; c1 += 1)
       {
@@ -160,11 +192,15 @@ struct SCube
     flip_y(Surface::Y_N);
     flip_y(Surface::Z_P);
     flip_y(Surface::Z_N);
+
+    for (int i = 0; i < 6; i++)
+      memcpy(blurred_edges[i], edges[i], sizeof(pixel)*cube_edge_i*cube_edge_i);
   }
 
   void turn_right(Surface s)
   {
     ::turn_right(edges[(int)s], cube_edge_i);
+    ::turn_right(blurred_edges[(int)s], cube_edge_i);
   }
 
   void flip_x(Surface s)
@@ -198,55 +234,55 @@ struct SCube
     case  Surface::X_P: 
       for (int i = 0; i < cube_edge_i; i++)
       {
-        left[i] = edges[int(Surface::Y_P)][cube_edge_i*(i + 1) - 1];
-        right[i] = edges[int(Surface::Y_N)][cube_edge_i*i];
-        top[i] = edges[int(Surface::Z_P)][cube_edge_i*i];
-        bottom[i] = edges[int(Surface::Z_N)][cube_edge_i*(i + 1) - 1];        
+        left[i] =   blurred_edges[int(Surface::Y_P)][cube_edge_i*(i + 1) - 1];
+        right[i] =  blurred_edges[int(Surface::Y_N)][cube_edge_i*i];
+        top[i] =    blurred_edges[int(Surface::Z_P)][cube_edge_i*i];
+        bottom[i] = blurred_edges[int(Surface::Z_N)][cube_edge_i*(i + 1) - 1];        
       } 
       break;
     case  Surface::X_N:
       for (int i = 0; i < cube_edge_i; i++)
       {
-        left[i] = edges[int(Surface::Y_N)][cube_edge_i*(i + 1) - 1];
-        right[i] = edges[int(Surface::Y_P)][cube_edge_i*i];
-        top[cube_edge_i - i - 1] = edges[int(Surface::Z_P)][cube_edge_i*(i + 1) - 1];
-        bottom[cube_edge_i - i - 1] = edges[int(Surface::Z_N)][cube_edge_i*i];        
+        left[i] =                     blurred_edges[int(Surface::Y_N)][cube_edge_i*(i + 1) - 1];
+        right[i] =                    blurred_edges[int(Surface::Y_P)][cube_edge_i*i];
+        top[cube_edge_i - i - 1] =    blurred_edges[int(Surface::Z_P)][cube_edge_i*(i + 1) - 1];
+        bottom[cube_edge_i - i - 1] = blurred_edges[int(Surface::Z_N)][cube_edge_i*i];        
       }      
       break;
     case  Surface::Y_P: 
       for (int i = 0; i < cube_edge_i; i++)
       {
-        left[i] = edges[int(Surface::X_N)][cube_edge_i*(i + 1) - 1];
-        right[i] = edges[int(Surface::X_P)][cube_edge_i*i];
-        top[cube_edge_i - i - 1] = edges[int(Surface::Z_P)][i];
-        bottom[i] = edges[int(Surface::Z_N)][i];        
+        left[i] =                   blurred_edges[int(Surface::X_N)][cube_edge_i*(i + 1) - 1];
+        right[i] =                  blurred_edges[int(Surface::X_P)][cube_edge_i*i];
+        top[cube_edge_i - i - 1] =  blurred_edges[int(Surface::Z_P)][i];
+        bottom[i] =                 blurred_edges[int(Surface::Z_N)][i];        
       }
       break;
     case  Surface::Y_N: 
       for (int i = 0; i < cube_edge_i; i++)
       {
-        left[i] = edges[int(Surface::X_P)][cube_edge_i*(i + 1) - 1];
-        right[i] = edges[int(Surface::X_N)][cube_edge_i*i];
-        top[i] = edges[int(Surface::Z_P)][cube_edge_i*(cube_edge_i - 1) + i];
-        bottom[cube_edge_i - i - 1] = edges[int(Surface::Z_N)][cube_edge_i*(cube_edge_i - 1) + i];        
+        left[i] =                     blurred_edges[int(Surface::X_P)][cube_edge_i*(i + 1) - 1];
+        right[i] =                    blurred_edges[int(Surface::X_N)][cube_edge_i*i];
+        top[i] =                      blurred_edges[int(Surface::Z_P)][cube_edge_i*(cube_edge_i - 1) + i];
+        bottom[cube_edge_i - i - 1] = blurred_edges[int(Surface::Z_N)][cube_edge_i*(cube_edge_i - 1) + i];        
       }
       break;
     case  Surface::Z_P:
       for (int i = 0; i < cube_edge_i; i++)
       {
-        left[i] = edges[int(Surface::X_P)][i];
-        right[cube_edge_i - i - 1] = edges[int(Surface::X_N)][i];
-        top[cube_edge_i - i - 1] = edges[int(Surface::Y_P)][i];
-        bottom[i] = edges[int(Surface::Y_N)][i];        
+        left[i] =                     blurred_edges[int(Surface::X_P)][i];
+        right[cube_edge_i - i - 1] =  blurred_edges[int(Surface::X_N)][i];
+        top[cube_edge_i - i - 1] =    blurred_edges[int(Surface::Y_P)][i];
+        bottom[i] =                   blurred_edges[int(Surface::Y_N)][i];        
       }
       break;
     case  Surface::Z_N: 
       for (int i = 0; i < cube_edge_i; i++)
       {
-        left[cube_edge_i - i - 1] = edges[int(Surface::X_N)][cube_edge_i*(cube_edge_i - 1) + i];
-        right[i] = edges[int(Surface::X_P)][cube_edge_i*(cube_edge_i - 1) + i];
-        top[i] = edges[int(Surface::Y_P)][cube_edge_i*(cube_edge_i - 1) + i];
-        bottom[cube_edge_i - i - 1] = edges[int(Surface::Y_N)][cube_edge_i*(cube_edge_i - 1) + i];        
+        left[cube_edge_i - i - 1] =   blurred_edges[int(Surface::X_N)][cube_edge_i*(cube_edge_i - 1) + i];
+        right[i] =                    blurred_edges[int(Surface::X_P)][cube_edge_i*(cube_edge_i - 1) + i];
+        top[i] =                      blurred_edges[int(Surface::Y_P)][cube_edge_i*(cube_edge_i - 1) + i];
+        bottom[cube_edge_i - i - 1] = blurred_edges[int(Surface::Y_N)][cube_edge_i*(cube_edge_i - 1) + i];        
       }
       break;
     }    
@@ -254,10 +290,16 @@ struct SCube
 
   void blur(int power)
   {
+    int cube_edge_i_2 = cube_edge_i + 2;
+    int cube_edge_i_1 = cube_edge_i + 1;
+
     pixel* top = new pixel[cube_edge_i];
     pixel* bottom = new pixel[cube_edge_i];
     pixel* left = new pixel[cube_edge_i];
     pixel* right = new pixel[cube_edge_i];
+
+    for (int i = 0; i < 6; i++)
+      memcpy(blurred_edges[i], edges[i], sizeof(pixel)*cube_edge_i*cube_edge_i);
 
     pixel* new_edges[6];
     for (int i = 0; i < 6; i++) new_edges[i] = new pixel[cube_edge_i*cube_edge_i];
@@ -266,47 +308,67 @@ struct SCube
     {      
       for (int k = 0; k < 6; k++)
       {
+        quokka::GProfiler()->Start("assign_borders");
         assign_borders(top, bottom, left, right, (Surface)k);
+        quokka::GProfiler()->Stop("assign_borders");
 
         pixel* ext_edge = new pixel[(cube_edge_i + 2)*(cube_edge_i + 2)];
 
-        //TODO: померить разницу
-        //for (int i = 1; i < cube_edge_i + 1; i++)
-        //  for (int j = 1; j < cube_edge_i + 1; j++)
-        //    ext_edge[i + j*(cube_edge_i + 2)] = edges[k][i - 1 + (j - 1)*cube_edge_i];
-  
-        for (int j = 1; j < cube_edge_i + 1; j++)
-          memcpy(&ext_edge[j*(cube_edge_i + 2) + 1], &edges[k][(j - 1)*cube_edge_i], sizeof(pixel)*cube_edge_i);
+        quokka::GProfiler()->Start("init_ext_edge");
+        for (int j = 1; j < cube_edge_i_1; j++)
+          memcpy(&ext_edge[j*cube_edge_i_2 + 1], &blurred_edges[k][(j - 1)*cube_edge_i], sizeof(pixel)*cube_edge_i);
 
         for (int i = 1; i < cube_edge_i + 1; i++)
         {
           ext_edge[i] = top[i - 1];
-          ext_edge[i*(cube_edge_i + 2)] = left[i - 1];
-          ext_edge[(i + 1)*(cube_edge_i + 2) - 1] = right[i - 1];
-          ext_edge[(cube_edge_i + 2)*(cube_edge_i + 1) + i] = bottom[i - 1];
+          ext_edge[i*cube_edge_i_2] = left[i - 1];
+          ext_edge[(i + 1)*cube_edge_i_2 - 1] = right[i - 1];
+          ext_edge[cube_edge_i_2*cube_edge_i_1 + i] = bottom[i - 1];
         }
 
-        ext_edge[0] = (ext_edge[1] + ext_edge[cube_edge_i + 2]) / 2;
-        ext_edge[cube_edge_i + 1] = (ext_edge[cube_edge_i - 1] + ext_edge[2 * (cube_edge_i + 2) - 1]) / 2;
-        ext_edge[(cube_edge_i + 2)*(cube_edge_i + 1)] = (ext_edge[(cube_edge_i + 2)*(cube_edge_i + 1) + 1] + ext_edge[cube_edge_i * (cube_edge_i + 2)]) / 2;
-        ext_edge[(cube_edge_i + 2)*(cube_edge_i + 2) - 1] = (ext_edge[(cube_edge_i + 2)*(cube_edge_i + 2) - 2] + ext_edge[(cube_edge_i + 2)*(cube_edge_i + 1)]) / 2;
+        ext_edge[0] = (ext_edge[1] + ext_edge[cube_edge_i_2]) / 2;
+        ext_edge[cube_edge_i_1] = (ext_edge[cube_edge_i - 1] + ext_edge[2 * (cube_edge_i_2)-1]) / 2;
+        ext_edge[cube_edge_i_2*cube_edge_i_1] = (ext_edge[cube_edge_i_2*cube_edge_i_1 + 1] + ext_edge[cube_edge_i * cube_edge_i_2]) / 2;
+        ext_edge[cube_edge_i_2*cube_edge_i_2 - 1] = (ext_edge[cube_edge_i_2*cube_edge_i_2 - 2] + ext_edge[cube_edge_i_2*cube_edge_i_1]) / 2;
+        quokka::GProfiler()->Stop("init_ext_edge");
 
-        for (int i = 1; i < cube_edge_i + 1; i++)
-          for (int j = 1; j < cube_edge_i + 1; j++)
+        quokka::GProfiler()->Start("sum");
+        for (int i = 1; i < cube_edge_i_1; i++)
+        for (int j = 1; j < cube_edge_i_1; j++)
           {
-            pixel sum = pixel();
-            for (int ii = -1; ii < 2; ii++)
-              for (int jj = -1; jj < 2; jj++)
-                sum = sum + ext_edge[(i + ii) + (j + jj)*(cube_edge_i + 2)];
-            new_edges[k][i - 1 + (j - 1)*cube_edge_i] = sum / 9;
+            //pixel sum = pixel();
+            //for (int jj = -1; jj < 2; jj++)
+            //for (int ii = -1; ii < 2; ii++)              
+            //    sum = sum + ext_edge[(i + ii) + (j + jj)*(cube_edge_i + 2)];
+            //new_edges[k][i - 1 + (j - 1)*cube_edge_i] = sum / 9;
+
+            new_edges[k][i - 1 + (j - 1)*cube_edge_i] = 
+              (
+              ext_edge[(i - 1) + (j - 1)*cube_edge_i_2] +
+              ext_edge[(i + 1) + (j - 1)*cube_edge_i_2] +
+              ext_edge[(i - 1) + (j + 1)*cube_edge_i_2] +
+              ext_edge[(i + 1) + (j + 1)*cube_edge_i_2] +
+              ext_edge[(i - 1) + j*cube_edge_i_2] +
+              ext_edge[(i + 1) + j*cube_edge_i_2] +
+              ext_edge[i + (j - 1)*cube_edge_i_2] +
+              ext_edge[i + (j + 1)*cube_edge_i_2] +
+              ext_edge[i + j*cube_edge_i_2]
+              )/ 9;
           }
+        quokka::GProfiler()->Stop("sum");
       }
+      quokka::GProfiler()->Start("back_to_edge");
       for (int i = 0; i < 6; i++)
-        memcpy(edges[i], new_edges[i], sizeof(pixel)*cube_edge_i*cube_edge_i);
+        memcpy(blurred_edges[i], new_edges[i], sizeof(pixel)*cube_edge_i*cube_edge_i);
+      quokka::GProfiler()->Stop("back_to_edge");
     }
+
+    for (int i = 0; i < 6; i++) delete[] new_edges[i];
+
   }
 
   pixel* edges[6];
+  pixel* blurred_edges[6];
   int cube_edge_i;
 };
 
@@ -363,39 +425,15 @@ void write_hdri_cross(const char* filename, const pixel** edges, int cube_edge)
 
 void write_dds_cubemap(const char* filename, pixel** edges, int cube_edge_i)
 {
-  FILE* f;
-
-  //errno_t err = fopen_s(&f, "E:\\Work\\hdr_cubemap\\images\\un_Papermill_Ruins_E.dds", "rb");
-  errno_t err = fopen_s(&f, "D:\\Stuff\\hdri_cubemap_converter\\HDR_110_Tunnel_Bg.dds", "rb");
-
-  DWORD magic_number;
-  DDS_HEADER header;
-  size_t bytes = fread(&magic_number, sizeof(DWORD), 1, f);
-  read_dds_header(f, &header);
+  DDS_HEADER header;  
   header.dwMipMapCount = 0;
   header.dwWidth = cube_edge_i;
   header.dwHeight = cube_edge_i;
 
-  fclose(f);
+  FILE* f;
+  errno_t err = fopen_s(&f, filename, "wb");
 
-  std::ofstream headerfile;
-  headerfile.open("D:\\Stuff\\hdri_cubemap_converter\\dds_header.txt");
-  headerfile << magic_number << std::endl;
-  for (int i = 0; i < sizeof(header) / sizeof(DWORD); i++)
-  {
-    DWORD line; memcpy(&line, (DWORD*)&header + i, sizeof(DWORD));
-    headerfile << line << std::endl;
-  }
-
-  headerfile.close();
-
-
-
-  //std::string filename = "D:\\Stuff\\hdri_cubemap_converter\\output.hdr";
-  //const char* filename = "E:\\Work\\hdr_cubemap\\images\\output.dds";
-  err = fopen_s(&f, filename, "wb");
-
-  fwrite(&magic_number, sizeof(DWORD), 1, f);
+  fwrite(&DDS_MAGIC_NUMBER, sizeof(DWORD), 1, f);
   fwrite(&header, sizeof(DDS_HEADER), 1, f);
 
   unsigned char* out_data = new unsigned char[cube_edge_i*cube_edge_i * 4];
@@ -411,6 +449,8 @@ void write_dds_cubemap(const char* filename, pixel** edges, int cube_edge_i)
     fwrite(out_data, sizeof(unsigned char), cube_edge_i*cube_edge_i * 4, f);
   }
 
+  delete[] out_data;
+
   fclose(f);  
 }
 
@@ -419,6 +459,14 @@ struct Singletone
   SImage image;
   SCube cube;
 } Singletone;
+
+extern "C" __declspec(dllexport)
+void init()
+{
+#ifdef _DEBUG
+  CreateConsole();
+#endif
+}
 
 extern "C" __declspec(dllexport)
 void open_hdri(const char* filename)
@@ -446,7 +494,7 @@ void save_cube_dds(const char* filename, int cube_edge_i)
   Singletone.cube.turn_right(Surface::Y_P);
   Singletone.cube.turn_right(Surface::Y_P);
 
-  write_dds_cubemap(filename, Singletone.cube.edges, cube_edge_i);
+  write_dds_cubemap(filename, Singletone.cube.blurred_edges, cube_edge_i);
 }
 
 extern "C" __declspec(dllexport) int get_width()  { return Singletone.image.width; }
@@ -454,12 +502,25 @@ extern "C" __declspec(dllexport) int get_height() { return Singletone.image.heig
 
 extern "C" __declspec(dllexport) pixel* get_pixels() { return Singletone.image.pixels; }
 extern "C" __declspec(dllexport) pixel* get_edge(int i) { return Singletone.cube.edges[i]; }
+extern "C" __declspec(dllexport) pixel* get_blurred_edge(int i) { return Singletone.cube.blurred_edges[i]; }
 extern "C" __declspec(dllexport) pixel* get_edge_t(int i, int turns)
 {
   int cube_edge_i = Singletone.cube.cube_edge_i;
 
   pixel* edge = new pixel[cube_edge_i*cube_edge_i];
   memcpy(edge, Singletone.cube.edges[i], sizeof(pixel)*cube_edge_i*cube_edge_i);
+  for (int i = 0; i < turns; i++)
+    turn_right(edge, cube_edge_i);
+
+  return edge;
+}
+
+extern "C" __declspec(dllexport) pixel* get_blurred_edge_t(int i, int turns)
+{
+  int cube_edge_i = Singletone.cube.cube_edge_i;
+
+  pixel* edge = new pixel[cube_edge_i*cube_edge_i];
+  memcpy(edge, Singletone.cube.blurred_edges[i], sizeof(pixel)*cube_edge_i*cube_edge_i);
   for (int i = 0; i < turns; i++)
     turn_right(edge, cube_edge_i);
 
@@ -532,12 +593,13 @@ int main()
   SImage image;
   //open_dds("E:\\Work\\hdr_cubemap\\images\\un_Papermill_Ruins_E.dds");
 
-  image.open_hdri("D:\\Stuff\\hdri_cubemap_converter\\glacier.hdr");
+  //image.open_hdri("D:\\Stuff\\hdri_cubemap_converter\\glacier.hdr");
+  image.open_hdri("E:\\Work\\hdr_cubemap\\images\\glacier.hdr");
 
   SCube cube;
   cube.make_cube(image.pixels, image.width, image.height, 256, 0);
 
-  //cube.blur(30);
+  cube.blur(30);
     
   //cube.turn_right(Surface::X_P);
   //cube.turn_right(Surface::X_P);
@@ -547,8 +609,8 @@ int main()
   //cube.turn_right(Surface::Y_P);
   //
   //
-  //write_dds_cubemap("E:\\Work\\hdr_cubemap\\images\\output.dds", cube.edges, 1024);
-  write_dds_cubemap("D:\\Stuff\\hdri_cubemap_converter\\output.dds", cube.edges, 256);
+  write_dds_cubemap("E:\\Work\\hdr_cubemap\\images\\output.dds", cube.edges, 256);
+  //write_dds_cubemap("D:\\Stuff\\hdri_cubemap_converter\\output.dds", cube.edges, 256);
 
   //open_hdri("E:\\Work\\hdr_cubemap\\images\\grace-new.hdr");
   //open_hdri("E:\\Work\\hdr_cubemap\\images\\glacier.hdr");
@@ -556,6 +618,8 @@ int main()
   //open_hdri("D:\\Stuff\\hdri_cubemap_converter\\uffizi-large.hdr");
   //open_hdri("D:\\Stuff\\hdri_cubemap_converter\\glacier.hdr");
   //open_hdri("D:\\Stuff\\hdri_cubemap_converter\\output.hdr");
+
+  quokka::GProfiler()->Print();
 
   system("PAUSE");
   //int exit;
