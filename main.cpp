@@ -91,6 +91,13 @@ void assign_xyz(float& x, float& y, float& z, int c1, int c2, int half_edge, Sur
 
 struct SCube
 {
+  SCube() { 
+    for (int i = 0; i < 6; i++)
+    {
+      edges[i] = nullptr;
+      blurred_edges[i] = nullptr;
+    }      
+  }
   ~SCube() { clear_edges(); }
 
   void clear_edges()
@@ -449,7 +456,11 @@ struct Singletone
   pixel* rendered_image;
   pixel* render()
   {
-    ::render(rendered_image, 1024, 1024);
+    pixel* diffuse = new pixel[cube.cube_edge_i * 6 * cube.cube_edge_i];
+    for (int i = 0; i < 6; i++)
+      memcpy(diffuse + i*cube.cube_edge_i*cube.cube_edge_i, cube.blurred_edges[i], cube.cube_edge_i*cube.cube_edge_i*sizeof(pixel));
+    ::render(rendered_image, 1024, 1024 , diffuse, cube.cube_edge_i, cube.cube_edge_i * 6);
+    delete[] diffuse;
     return rendered_image;
   }
 
@@ -587,18 +598,16 @@ extern "C" __declspec(dllexport) pixel* render() { return Singletone.render(); }
 
 int main()
 {   
-  SImage image;
   //open_dds("E:\\Work\\hdr_cubemap\\images\\un_Papermill_Ruins_E.dds");
 
+  Singletone.image.open_hdri("D:\\Stuff\\hdri_cubemap_converter\\glacier.hdr");
+  //image.open_hdri("E:\\Work\\hdr_cubemap\\images\\glacier.hdr");
+
+  Singletone.cube.make_cube(Singletone.image.pixels, Singletone.image.width, Singletone.image.height, 256, 0);
+
+  //cube.blur(30);
+
   Singletone.render();
-
-  //image.open_hdri("D:\\Stuff\\hdri_cubemap_converter\\glacier.hdr");
-  image.open_hdri("E:\\Work\\hdr_cubemap\\images\\glacier.hdr");
-
-  SCube cube;
-  cube.make_cube(image.pixels, image.width, image.height, 256, 0);
-
-  cube.blur(30);
     
   //cube.turn_right(Surface::X_P);
   //cube.turn_right(Surface::X_P);
@@ -608,7 +617,7 @@ int main()
   //cube.turn_right(Surface::Y_P);
   //
   //
-  write_dds_cubemap("E:\\Work\\hdr_cubemap\\images\\output.dds", cube.edges, 256);
+  write_dds_cubemap("E:\\Work\\hdr_cubemap\\images\\output.dds", Singletone.cube.edges, 256);
   //write_dds_cubemap("D:\\Stuff\\hdri_cubemap_converter\\output.dds", cube.edges, 256);
 
   //open_hdri("E:\\Work\\hdr_cubemap\\images\\grace-new.hdr");

@@ -30,6 +30,11 @@ struct model
   std::vector<vec3> normals;
   std::vector<vec3> uvs;
   std::vector<face> faces;
+
+  pixel* diffuse = nullptr;
+  int d_width = 0;
+  int d_height = 0;
+
   void from_file(std::string filename)
   {
     verts.clear();
@@ -38,6 +43,8 @@ struct model
     uvs.clear();
 
     std::ifstream file(filename);
+
+    float c_max = 0;
 
     for (std::string line; std::getline(file, line);)
     {
@@ -49,6 +56,9 @@ struct model
       {
         vec3 vert;
         s_line >> vert.x >> vert.y >> vert.z;
+        if (abs(vert.x) > c_max) c_max = abs(vert.x);
+        if (abs(vert.y) > c_max) c_max = abs(vert.y);
+        if (abs(vert.z) > c_max) c_max = abs(vert.z);
         verts.push_back(vert);
       }
       else
@@ -79,6 +89,9 @@ struct model
         faces.push_back(f);
       }
     }
+
+    for (vec3& v : verts)
+      v = v / c_max;
 
     file.close();
   }
@@ -139,7 +152,9 @@ void triangle(face& f, model& m, pixel* image, int w, int h, float intensity, fl
       if (z_buffer[index] < p.z)
       {
         z_buffer[index] = p.z;
-        image[index] = pixel(intensity, intensity, intensity);
+        int dif_index = int(m.d_width*uv_p.y + m.d_width*m.d_height*uv_p.x);
+        if (dif_index < 0 || dif_index >= m.d_width*m.d_height) dif_index = 0;
+        image[index] = m.diffuse ? m.diffuse[dif_index] : pixel(intensity, intensity, intensity);
       }
     }
   }
@@ -201,10 +216,14 @@ void draw_triangular_model(model& a_model, pixel* a_image, int w, int h, float* 
   }
 }
 
-void render(pixel* image, int width, int height)
+void render(pixel* image, int width, int height, pixel* diffuse = nullptr, int d_w = 0, int d_h = 0)
 {
   model m;
   m.from_file("skysphere.obj");
+  m.diffuse = diffuse;
+  m.d_height = d_h;
+  m.d_width = d_w;
+  //m.from_file("skysphere.obj");
   //m.from_file("african_head.obj");
   //m.diffuse.read_tga_file("tinyrenderer-master\\tinyrenderer-master\\obj\\african_head_diffuse.tga");
   //m.diffuse.flip_vertically();
