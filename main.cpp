@@ -9,6 +9,7 @@
 #include "MemoryCounter.h"
 #endif
 
+#include "renderer.h"
 #include "rgbe.h"
 #include "dds.h"
 #include "big_quokka.h"
@@ -18,25 +19,6 @@ namespace quokka
   Profiler* Profiler::Instance = new Profiler();
   Profiler* GProfiler() { return Profiler::GetInstance(); }
 }
-
-struct pixel
-{
-  float r = 0, g = 0, b = 0;
-  pixel() : r(0), g(0), b(0) {}
-  pixel(float ar, float ag, float ab) : r(ar), g(ag), b(ab) {}
-
-  pixel operator/(float v)
-  {
-    return pixel(r/v, g/v, b/v);
-  }
-};
-
-pixel operator+(pixel& a, pixel& b)
-{
-  return pixel(a.r + b.r, a.g + b.g, a.b + b.b);
-}
-
-
 
 struct SImage
 {
@@ -455,9 +437,22 @@ void write_dds_cubemap(const char* filename, pixel** edges, int cube_edge_i)
 }
 
 struct Singletone
-{
+{ 
+  Singletone()
+  {
+    rendered_image = new pixel[1024 * 1024];
+  }
+
   SImage image;
   SCube cube;
+
+  pixel* rendered_image;
+  pixel* render()
+  {
+    ::render(rendered_image, 1024, 1024);
+    return rendered_image;
+  }
+
 } Singletone;
 
 extern "C" __declspec(dllexport)
@@ -530,6 +525,8 @@ extern "C" __declspec(dllexport) pixel* get_blurred_edge_t(int i, int turns)
 extern "C" __declspec(dllexport) int get_float_size() { return sizeof(float); }
 extern "C" __declspec(dllexport) void blur(int power) { Singletone.cube.blur(power); }
 
+extern "C" __declspec(dllexport) pixel* render() { return Singletone.render(); }
+
 
 //{
 //  FILE* f;
@@ -592,6 +589,8 @@ int main()
 {   
   SImage image;
   //open_dds("E:\\Work\\hdr_cubemap\\images\\un_Papermill_Ruins_E.dds");
+
+  Singletone.render();
 
   //image.open_hdri("D:\\Stuff\\hdri_cubemap_converter\\glacier.hdr");
   image.open_hdri("E:\\Work\\hdr_cubemap\\images\\glacier.hdr");
