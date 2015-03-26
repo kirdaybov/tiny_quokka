@@ -109,6 +109,52 @@ struct SCube
     }
   }
 
+  pixel** copy_cube()
+  {
+    pixel** edges = new pixel*[6];
+    for (int i = 0; i < 6; i++)
+    {
+      edges[i] = new pixel[cube_edge_i*cube_edge_i];
+      memcpy(edges[i], blurred_edges[i], sizeof(pixel)*cube_edge_i*cube_edge_i);
+    }      
+    return edges;
+  }
+
+  static void delete_edges(pixel** edges, int cube_edge_i)
+  {
+    for (int i = 0; i < 6; i++)
+    {
+      delete[] edges[i];      
+      edges[i] = nullptr;
+    }
+
+    delete[] edges;
+  }
+
+  pixel* get_unreal_cubemap()
+  {
+    pixel** l_edges = copy_cube();
+
+    ::turn_right(l_edges[0], cube_edge_i);
+    ::turn_right(l_edges[0], cube_edge_i);
+    ::turn_right(l_edges[0], cube_edge_i);
+    ::turn_right(l_edges[1], cube_edge_i);
+    ::turn_right(l_edges[2], cube_edge_i);
+    ::turn_right(l_edges[2], cube_edge_i);
+
+    pixel* diffuse = new pixel[cube_edge_i * 6 * cube_edge_i];
+    
+    for (int j = 0; j < cube_edge_i; j++)
+    {
+      for (int i = 0; i < 6; i++)
+      {
+        memcpy(diffuse + (i + j * 6) * cube_edge_i, (pixel*)(l_edges[i]) + j*cube_edge_i, sizeof(pixel)*cube_edge_i);
+      }
+    }            
+    
+    return diffuse;
+  }
+
   void make_cube(pixel* pixels, int width, int height, int cube_edge_i, float angle_degrees_z = 0.0f)
   {
     clear_edges();
@@ -456,10 +502,8 @@ struct Singletone
   pixel* rendered_image;
   pixel* render()
   {
-    pixel* diffuse = new pixel[cube.cube_edge_i * 6 * cube.cube_edge_i];
-    for (int i = 0; i < 6; i++)
-      memcpy(diffuse + i*cube.cube_edge_i*cube.cube_edge_i, cube.blurred_edges[i], cube.cube_edge_i*cube.cube_edge_i*sizeof(pixel));
-    ::render(rendered_image, 1024, 1024 , diffuse, cube.cube_edge_i, cube.cube_edge_i * 6);
+    pixel* diffuse = cube.get_unreal_cubemap();
+    ::render(rendered_image, 1024, 1024 , diffuse, cube.cube_edge_i*6, cube.cube_edge_i);
     delete[] diffuse;
     return rendered_image;
   }

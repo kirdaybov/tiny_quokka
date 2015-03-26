@@ -17,6 +17,11 @@ struct pixel
   {
     return pixel(r / v, g / v, b / v);
   }
+
+  pixel operator*(float v)
+  {
+    return pixel(r * v, g * v, b * v);
+  }
 };
 
 pixel operator+(pixel& a, pixel& b)
@@ -152,9 +157,9 @@ void triangle(face& f, model& m, pixel* image, int w, int h, float intensity, fl
       if (z_buffer[index] < p.z)
       {
         z_buffer[index] = p.z;
-        int dif_index = int(m.d_width*uv_p.y + m.d_width*m.d_height*uv_p.x);
+        int dif_index = int(m.d_width*uv_p.x) + m.d_width*int(m.d_height*uv_p.y);
         if (dif_index < 0 || dif_index >= m.d_width*m.d_height) dif_index = 0;
-        image[index] = m.diffuse ? m.diffuse[dif_index] : pixel(intensity, intensity, intensity);
+        image[index] = m.diffuse ? m.diffuse[dif_index]*intensity : pixel(intensity, intensity, intensity);
       }
     }
   }
@@ -219,7 +224,7 @@ void draw_triangular_model(model& a_model, pixel* a_image, int w, int h, float* 
 void render(pixel* image, int width, int height, pixel* diffuse = nullptr, int d_w = 0, int d_h = 0)
 {
   model m;
-  m.from_file("skysphere.obj");
+  m.from_file("skybox_inv.obj");
   m.diffuse = diffuse;
   m.d_height = d_h;
   m.d_width = d_w;
