@@ -135,12 +135,17 @@ struct SCube
   {
     pixel** l_edges = copy_cube();
 
+    pixel* copy_edge = new pixel[cube_edge_i*cube_edge_i];
+    memcpy(copy_edge , l_edges[2], sizeof(pixel)*cube_edge_i*cube_edge_i);
+    memcpy(l_edges[2], l_edges[3], sizeof(pixel)*cube_edge_i*cube_edge_i);
+    memcpy(l_edges[3], copy_edge , sizeof(pixel)*cube_edge_i*cube_edge_i);
+
     ::turn_right(l_edges[0], cube_edge_i);
     ::turn_right(l_edges[0], cube_edge_i);
     ::turn_right(l_edges[0], cube_edge_i);
     ::turn_right(l_edges[1], cube_edge_i);
-    ::turn_right(l_edges[2], cube_edge_i);
-    ::turn_right(l_edges[2], cube_edge_i);
+    ::turn_right(l_edges[3], cube_edge_i);
+    ::turn_right(l_edges[3], cube_edge_i);
 
     pixel* diffuse = new pixel[cube_edge_i * 6 * cube_edge_i];
     
@@ -503,7 +508,7 @@ struct Singletone
   pixel* render()
   {
     pixel* diffuse = cube.get_unreal_cubemap();
-    ::render(rendered_image, 1024, 1024 , diffuse, cube.cube_edge_i*6, cube.cube_edge_i);
+    ::render(rendered_image, 1024, 1024, diffuse, cube.cube_edge_i*6, cube.cube_edge_i);
     delete[] diffuse;
     return rendered_image;
   }

@@ -36,6 +36,8 @@ struct model
   std::vector<vec3> uvs;
   std::vector<face> faces;
 
+  float scale = 1.0f;
+
   pixel* diffuse = nullptr;
   int d_width = 0;
   int d_height = 0;
@@ -95,8 +97,30 @@ struct model
       }
     }
 
+    float angle_x = 45.f / 180 * 3.14;
+    float angle_z = 45.f / 180 * 3.14;
+
     for (vec3& v : verts)
-      v = v / c_max;
+    {
+      v = v / c_max * scale;
+      
+      float x = v.x*cosf(angle_x) - v.y*sinf(angle_x);
+      float y = v.x*sinf(angle_x) + v.y*cosf(angle_x);
+      float z = v.z;
+
+      v.x = x;
+      v.y = y;
+      v.z = z;
+
+      //x = v.x;
+      //y = v.y*cosf(angle_z) - v.z*sinf(angle_z);
+      //z = v.y*sinf(angle_z) + v.z*cosf(angle_z);
+      //
+      //v.x = x;
+      //v.y = y;
+      //v.z = z;
+    }
+      
 
     file.close();
   }
@@ -127,7 +151,7 @@ void triangle(face& f, model& m, pixel* image, int w, int h, float intensity, fl
   for (float x = verts[0].x; x <= verts[2].x; x += 1)
   {
     bool bSecondHalf = x >= verts[1].x;
-    if (bSecondHalf) { dir1 = verts[2] - verts[1]; uv_dir1 = uv_verts[2] - uv_verts[0]; }
+    if (bSecondHalf) { dir1 = verts[2] - verts[1]; uv_dir1 = uv_verts[2] - uv_verts[1]; }
 
     float k1 = dir1.x != 0 ? (x - (bSecondHalf ? verts[1].x : verts[0].x)) / dir1.x : 1.f;
     float k2 = dir2.x != 0 ? (x - verts[0].x) / dir2.x : 1.f;
@@ -158,7 +182,7 @@ void triangle(face& f, model& m, pixel* image, int w, int h, float intensity, fl
       {
         z_buffer[index] = p.z;
         int dif_index = int(m.d_width*uv_p.x) + m.d_width*int(m.d_height*uv_p.y);
-        if (dif_index < 0 || dif_index >= m.d_width*m.d_height) dif_index = 0;
+        if (dif_index < 0 || dif_index >= m.d_width*m.d_height) dif_index = 0;        
         image[index] = m.diffuse ? m.diffuse[dif_index]*intensity : pixel(intensity, intensity, intensity);
       }
     }
@@ -224,7 +248,7 @@ void draw_triangular_model(model& a_model, pixel* a_image, int w, int h, float* 
 void render(pixel* image, int width, int height, pixel* diffuse = nullptr, int d_w = 0, int d_h = 0)
 {
   model m;
-  m.from_file("skybox_inv.obj");
+  m.from_file("skysphere.obj");
   m.diffuse = diffuse;
   m.d_height = d_h;
   m.d_width = d_w;
@@ -237,7 +261,15 @@ void render(pixel* image, int width, int height, pixel* diffuse = nullptr, int d
   for (int i = 0; i < width*height; i++) z_buffer[i] = -FLT_MAX;
 
   draw_triangular_model(m, image, width, height, z_buffer);
-  //draw_wireframe(m, image);
+
+  model m2;
+  m2.scale = 4.0f;
+  m2.from_file("skysphere_inv.obj");
+  m2.diffuse = diffuse;
+  m2.d_height = d_h;
+  m2.d_width = d_w;
+    
+  draw_triangular_model(m2, image, width, height, z_buffer);
 
   delete[] z_buffer;
 }
