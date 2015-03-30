@@ -70,4 +70,27 @@ struct face
   int v3, t3, n3;
 };
 
+struct matrix
+{
+  matrix(int n, int m) : N(n), M(m)
+  {
+    if (elements) delete[] elements;
+    elements = new float[N*M];
+  }
+  int N; //columns
+  int M; //rows
+
+  float* elements = nullptr;
+
+  float get(int n, int m) const 
+  {
+    return elements[n + N*m];
+  }
+
+  void set(int n, int m, float value)
+  {
+    elements[n + N*m] = value;
+  }
+};
+
 #endif
