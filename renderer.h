@@ -108,14 +108,14 @@ struct model
       float y = v.x*sinf(angle_x) + v.y*cosf(angle_x);
       float z = v.z;
 
-      v.x = x;
-      v.y = y;
-      v.z = z;
+      //v.x = x;
+      //v.y = y;
+      //v.z = z;
 
       //x = v.x;
       //y = v.y*cosf(angle_z) - v.z*sinf(angle_z);
       //z = v.y*sinf(angle_z) + v.z*cosf(angle_z);
-      //
+      
       //v.x = x;
       //v.y = y;
       //v.z = z;
@@ -132,9 +132,10 @@ void triangle(face& f, model& m, pixel* image, int w, int h, float intensity, fl
 {
   vec3 verts[3] = { m.verts[f.v1], m.verts[f.v2], m.verts[f.v3] };
   vec3 uv_verts[3] = { m.uvs[f.t1], m.uvs[f.t2], m.uvs[f.t3] };
-  if (verts[0].x > verts[1].x) { std::swap(verts[0], verts[1]), std::swap(uv_verts[0], uv_verts[1]); }
-  if (verts[1].x > verts[2].x) { std::swap(verts[1], verts[2]), std::swap(uv_verts[1], uv_verts[2]); }
-  if (verts[0].x > verts[1].x) { std::swap(verts[0], verts[1]), std::swap(uv_verts[0], uv_verts[1]); }
+  vec3 normals[3] = { m.normals[f.n1], m.normals[f.n2], m.normals[f.n3] };
+  if (verts[0].x > verts[1].x) { std::swap(verts[0], verts[1]), std::swap(uv_verts[0], uv_verts[1]); std::swap(normals[0], normals[1]); }
+  if (verts[1].x > verts[2].x) { std::swap(verts[1], verts[2]), std::swap(uv_verts[1], uv_verts[2]); std::swap(normals[1], normals[2]); }
+  if (verts[0].x > verts[1].x) { std::swap(verts[0], verts[1]), std::swap(uv_verts[0], uv_verts[1]); std::swap(normals[0], normals[1]); }
 
   for (int j = 0; j < 3; j++)
   {
@@ -147,8 +148,9 @@ void triangle(face& f, model& m, pixel* image, int w, int h, float intensity, fl
   vec3 uv_dir1 = uv_verts[1] - uv_verts[0];
   vec3 uv_dir2 = uv_verts[2] - uv_verts[0];
 
-
-  for (float x = verts[0].x; x <= verts[2].x; x += 1)
+  float step_x = 0.4f;
+  float step_y = 0.4f;
+  for (float x = verts[0].x; x <= verts[2].x; x += step_x)
   {
     bool bSecondHalf = x >= verts[1].x;
     if (bSecondHalf) { dir1 = verts[2] - verts[1]; uv_dir1 = uv_verts[2] - uv_verts[1]; }
@@ -165,7 +167,7 @@ void triangle(face& f, model& m, pixel* image, int w, int h, float intensity, fl
 
     vec3 dir = p2 - p1;
     vec3 uv_dir = uv_p2 - uv_p1;
-
+        
     for (float y = p1.y; y <= p2.y; y += 1)
     {
       float k = dir.y != 0 ? (y - p1.y) / (p2.y - p1.y) : 1.f;
@@ -182,7 +184,8 @@ void triangle(face& f, model& m, pixel* image, int w, int h, float intensity, fl
       {
         z_buffer[index] = p.z;
         int dif_index = int(m.d_width*uv_p.x) + m.d_width*int(m.d_height*uv_p.y);
-        if (dif_index < 0 || dif_index >= m.d_width*m.d_height) dif_index = 0;        
+        if (dif_index < 0) dif_index = 0;        
+        if (dif_index >= m.d_width*m.d_height) dif_index = m.d_width*m.d_height - 1;
         image[index] = m.diffuse ? m.diffuse[dif_index]*intensity : pixel(intensity, intensity, intensity);
       }
     }
@@ -263,7 +266,7 @@ void render(pixel* image, int width, int height, pixel* diffuse = nullptr, int d
   draw_triangular_model(m, image, width, height, z_buffer);
 
   model m2;
-  m2.scale = 4.0f;
+  m2.scale = 2.0f;
   m2.from_file("skysphere_inv.obj");
   m2.diffuse = diffuse;
   m2.d_height = d_h;
