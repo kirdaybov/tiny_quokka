@@ -70,6 +70,22 @@ struct face
   int v3, t3, n3;
 };
 
+struct mat3x3
+{
+  float _11, _12, _13;
+  float _21, _22, _23;
+  float _31, _32, _33;
+};
+
+vec3 operator *(mat3x3 m, vec3 v)
+{
+  vec3 result;
+  result.x = m._11*v.x + m._12*v.y + m._13*v.z;
+  result.y = m._21*v.x + m._22*v.y + m._23*v.z;
+  result.z = m._31*v.x + m._32*v.y + m._33*v.z;
+  return result;
+}
+
 struct matrix
 {
   matrix(int n, int m) : N(n), M(m)
