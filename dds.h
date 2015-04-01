@@ -35,7 +35,7 @@ struct DDS_HEADER{
   DWORD           dwReserved2 = 0;
 };
 
-void read_dds_header(FILE* f, DDS_HEADER* header)
+inline void read_dds_header(FILE* f, DDS_HEADER* header)
 {  
   size_t bytes = fread(header, sizeof(DDS_HEADER), 1, f);
 };

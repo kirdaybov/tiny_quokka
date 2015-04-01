@@ -77,7 +77,7 @@ struct mat3x3
   float _31, _32, _33;
 };
 
-vec3 operator *(mat3x3 m, vec3 v)
+inline vec3 operator *(mat3x3 m, vec3 v)
 {
   vec3 result;
   result.x = m._11*v.x + m._12*v.y + m._13*v.z;

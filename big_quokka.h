@@ -111,5 +111,5 @@ namespace quokka
     std::map<std::string, ProfilerStamp> Stamps;
   };
 
-  Profiler* GProfiler();
+  extern Profiler* GProfiler();
 }
