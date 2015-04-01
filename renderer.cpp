@@ -83,12 +83,12 @@ void renderer::draw_triangular_model(model& a_model, pixel* a_image)
     e1 = v[1] - v[0];
     e2 = v[2] - v[0];
 
-    vec3 normal = cross(e2, e1);
+    vec3 normal = vec3::cross(e2, e1);
     normal.normalize();
 
     vec3 light = { 0, 0, 1 };
 
-    float intensity = dot(normal, light);
+    float intensity = vec3::dot(normal, light);
 
     if (intensity > 0)
       triangle(f, a_model, a_image, intensity);

@@ -22,12 +22,14 @@ struct pixel
   {
     return pixel(r * v, g * v, b * v);
   }
+
+  pixel operator+(pixel& v)
+  {
+    return pixel(this->r + v.r, this->g + v.g, this->b + v.b);
+  }
 };
 
-inline pixel operator+(pixel& a, pixel& b)
-{
-  return pixel(a.r + b.r, a.g + b.g, a.b + b.b);
-}
+
 
 struct model
 {
