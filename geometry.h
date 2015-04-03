@@ -3,6 +3,8 @@
 
 #include <math.h>
 
+#define M_PI 3.1415f
+
 struct vec3
 {
   float x, y, z;
@@ -72,9 +74,9 @@ struct face
 
 struct mat3x3
 {
-  float _11, _12, _13;
-  float _21, _22, _23;
-  float _31, _32, _33;
+  float _11 = 0.f, _12 = 0.f, _13 = 0.f;
+  float _21 = 0.f, _22 = 0.f, _23 = 0.f;
+  float _31 = 0.f, _32 = 0.f, _33 = 0.f;
 
   vec3 operator *(vec3 v)
   {
@@ -83,6 +85,21 @@ struct mat3x3
     result.y = this->_21*v.x + this->_22*v.y + this->_23*v.z;
     result.z = this->_31*v.x + this->_32*v.y + this->_33*v.z;
     return result;
+  }
+
+
+  static mat3x3 make_z_matrix(float degrees)
+  {
+    degrees = M_PI * degrees / 180.f;
+    mat3x3 m_z;
+
+    float cos = cosf(degrees);
+    float sin = sinf(degrees);
+    m_z._11 = cos; m_z._12 = -sin;
+    m_z._21 = sin; m_z._22 = cos;
+    m_z._33 = 1.f;
+
+    return m_z;
   }
 };
 

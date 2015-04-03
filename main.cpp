@@ -38,12 +38,16 @@ struct Singletone
     sphere_inv.from_file("skysphere_inv.obj");    
   }
 
-  pixel* rendered_image;  
+  pixel* rendered_image = nullptr;  
 
   renderer _renderer;
 
-  pixel* render()
+  pixel* render(float z_angle)
   {
+    if (rendered_image) delete[] rendered_image;
+
+    rendered_image = new pixel[1024 * 1024];
+
     pixel* diffuse = cube.get_unreal_cubemap();
     int diffuse_w = cube.cube_edge_i * 6;
     int diffuse_h = cube.cube_edge_i;
@@ -51,13 +55,15 @@ struct Singletone
     sphere.diffuse = diffuse;
     sphere.d_height = diffuse_h;
     sphere.d_width = diffuse_w;
+    sphere.set_rotation(z_angle);
 
     sphere_inv.diffuse = diffuse;
     sphere_inv.d_height = diffuse_h;
     sphere_inv.d_width = diffuse_w;
+    //sphere_inv.scale = .f;
 
     _renderer.clear_z();
-    _renderer.draw_triangular_model(sphere, rendered_image);
+    //_renderer.draw_triangular_model(sphere, rendered_image);
     _renderer.draw_triangular_model(sphere_inv, rendered_image);
     
     delete[] diffuse;
@@ -138,7 +144,7 @@ extern "C" __declspec(dllexport) pixel* get_blurred_edge_t(int i, int turns)
 extern "C" __declspec(dllexport) int get_float_size() { return sizeof(float); }
 extern "C" __declspec(dllexport) void blur(int power) { Singletone.cube.blur(power); }
 
-extern "C" __declspec(dllexport) pixel* render() { return Singletone.render(); }
+extern "C" __declspec(dllexport) pixel* render(float z_angle) { return Singletone.render(z_angle); }
 
 
 //{
@@ -209,7 +215,7 @@ int main()
 
   //cube.blur(30);
 
-  Singletone.render();
+  //Singletone.render();
     
   //cube.turn_right(Surface::X_P);
   //cube.turn_right(Surface::X_P);

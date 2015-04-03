@@ -38,7 +38,13 @@ struct model
   std::vector<vec3> uvs;
   std::vector<face> faces;
 
-  float scale = 1.0f;
+  float scale = 1.f;
+  mat3x3 rot_z = mat3x3::make_z_matrix(0.f);
+
+  void set_rotation(float z_degrees)
+  {
+    rot_z = mat3x3::make_z_matrix(z_degrees);
+  }
 
   pixel* diffuse = nullptr;
   int d_width = 0;
@@ -104,25 +110,8 @@ struct model
 
     for (vec3& v : verts)
     {
-      v = v / c_max * scale;
-      
-      float x = v.x*cosf(angle_x) - v.y*sinf(angle_x);
-      float y = v.x*sinf(angle_x) + v.y*cosf(angle_x);
-      float z = v.z;
-
-      //v.x = x;
-      //v.y = y;
-      //v.z = z;
-
-      //x = v.x;
-      //y = v.y*cosf(angle_z) - v.z*sinf(angle_z);
-      //z = v.y*sinf(angle_z) + v.z*cosf(angle_z);
-      
-      //v.x = x;
-      //v.y = y;
-      //v.z = z;
-    }
-      
+      v = v / c_max;
+    } 
 
     file.close();
   }

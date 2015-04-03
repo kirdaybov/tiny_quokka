@@ -4,13 +4,22 @@ void renderer::clear_z()
 {
   if (!z_buffer)
     z_buffer = new float[width*height];
-  else
-    memset(z_buffer, 255, sizeof(float)*width*height);
+  for (int i = 0; i < width*height; i++)
+    z_buffer[i] = -FLT_MAX;
+    //memset(z_buffer, 255, sizeof(float)*width*height);
 }
 
 void renderer::triangle(face& f, model& m, pixel* image, float intensity)
 {
   vec3 verts[3] = { m.verts[f.v1], m.verts[f.v2], m.verts[f.v3] };
+
+  // transformation
+  for (vec3 &v : verts)
+  {
+    v = v * m.scale;
+    v = m.rot_z*v;
+  }
+
   vec3 uv_verts[3] = { m.uvs[f.t1], m.uvs[f.t2], m.uvs[f.t3] };
   vec3 normals[3] = { m.normals[f.n1], m.normals[f.n2], m.normals[f.n3] };
   if (verts[0].x > verts[1].x) { std::swap(verts[0], verts[1]), std::swap(uv_verts[0], uv_verts[1]); std::swap(normals[0], normals[1]); }
@@ -78,6 +87,13 @@ void renderer::draw_triangular_model(model& a_model, pixel* a_image)
   {
     face f = a_model.faces[i];
     vec3 v[3] = { a_model.verts[f.v1], a_model.verts[f.v2], a_model.verts[f.v3] };
+
+    // transformation
+    for (vec3 &v : v)
+    {
+      v = v * a_model.scale;
+      v = a_model.rot_z*v;
+    }
 
     vec3 e1, e2;
     e1 = v[1] - v[0];

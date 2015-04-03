@@ -216,8 +216,6 @@ void SCube::make_cube(pixel* pixels, int width, int height, int cube_edge_i, flo
   float c_y = -cube_edge / 2;
   float c_z = -cube_edge / 2;
 
-  float M_PI = 3.1415;
-
   float angle_z = M_PI * angle_degrees_z / 180.f;
 
   for (int i = 0; i < 6; i++)
