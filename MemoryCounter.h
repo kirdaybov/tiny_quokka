@@ -1,4 +1,6 @@
 #pragma once
+#define MEMORY_COUNTER_H
+#ifndef MEMORY_COUNTER_H
 
 #include "print.h"
 
@@ -70,3 +72,5 @@ inline void operator delete[](void* ptr)
   memory.in_use -= memory.arr[i].size;
   free(ptr);
 }
+
+#endif

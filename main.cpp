@@ -51,20 +51,25 @@ struct Singletone
     pixel* diffuse = cube.get_unreal_cubemap();
     int diffuse_w = cube.cube_edge_i * 6;
     int diffuse_h = cube.cube_edge_i;
-
+    
     sphere.diffuse = diffuse;
     sphere.d_height = diffuse_h;
     sphere.d_width = diffuse_w;
     sphere.set_rotation(z_angle);
-
+    
     sphere_inv.diffuse = diffuse;
     sphere_inv.d_height = diffuse_h;
     sphere_inv.d_width = diffuse_w;
-    //sphere_inv.scale = .f;
-
+    sphere_inv.scale = 2.f;
+    
     _renderer.clear_z();
-    //_renderer.draw_triangular_model(sphere, rendered_image);
+    quokka::GProfiler()->Start("sphere");
+    _renderer.draw_triangular_model(sphere, rendered_image);
+    quokka::GProfiler()->Stop("sphere");
+
+    quokka::GProfiler()->Start("sphere_inv");
     _renderer.draw_triangular_model(sphere_inv, rendered_image);
+    quokka::GProfiler()->Stop("sphere_inv");
     
     delete[] diffuse;
 
@@ -79,6 +84,14 @@ void init()
   Singletone.init();
 #ifdef _DEBUG
   CreateConsole();
+#endif
+}
+
+extern "C" __declspec(dllexport)
+void deinit()
+{
+#ifdef _DEBUG
+  quokka::GProfiler()->Print();
 #endif
 }
 
@@ -206,12 +219,18 @@ extern "C" __declspec(dllexport) pixel* render(float z_angle) { return Singleton
 
 int main()
 {   
+  print_out("\n %10s %2d", "long long", sizeof(long long));
+  print_out("\n %10s %2d", "long", sizeof(long));
+  print_out("\n %10s %2d", "double", sizeof(double));
+  print_out("\n %10s %2d", "float", sizeof(float));
+  print_out("\n %10s %2d", "int", sizeof(int));
+
   //open_dds("E:\\Work\\hdr_cubemap\\images\\un_Papermill_Ruins_E.dds");
 
-  Singletone.image.open_hdri("D:\\Stuff\\hdri_cubemap_converter\\glacier.hdr");
+  //Singletone.image.open_hdri("D:\\Stuff\\hdri_cubemap_converter\\glacier.hdr");
   //image.open_hdri("E:\\Work\\hdr_cubemap\\images\\glacier.hdr");
 
-  Singletone.cube.make_cube(Singletone.image.pixels, Singletone.image.width, Singletone.image.height, 256, 0);
+  //Singletone.cube.make_cube(Singletone.image.pixels, Singletone.image.width, Singletone.image.height, 256, 0);
 
   //cube.blur(30);
 
@@ -225,7 +244,7 @@ int main()
   //cube.turn_right(Surface::Y_P);
   //
   //
-  write_dds_cubemap("E:\\Work\\hdr_cubemap\\images\\output.dds", Singletone.cube.edges, 256);
+  //write_dds_cubemap("E:\\Work\\hdr_cubemap\\images\\output.dds", Singletone.cube.edges, 256);
   //write_dds_cubemap("D:\\Stuff\\hdri_cubemap_converter\\output.dds", cube.edges, 256);
 
   //open_hdri("E:\\Work\\hdr_cubemap\\images\\grace-new.hdr");

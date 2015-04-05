@@ -12,7 +12,7 @@
   OutputDebugString(output); \
   }
 
-void print_out(const char* format, ...)
+inline void print_out(const char* format, ...)
 {
   char output[256];
   va_list args;

@@ -5,6 +5,8 @@
 #include <string>
 #include <map>
 
+#include "print.h"
+
 namespace quokka
 {
   template <class T>
@@ -33,7 +35,7 @@ namespace quokka
   public:
     virtual void CalculateFrameTime() = 0;
     virtual float GetFrameTime() = 0;
-    virtual float GetGlobalTime() = 0;
+    virtual long long GetGlobalTime() = 0;
   };
 
   class STDChronoTimer : public Timer, public Singletone<STDChronoTimer>
@@ -58,7 +60,7 @@ namespace quokka
 
     virtual float GetFrameTime() { return LastFrameDuration / 1000.0f; }
 
-    virtual float GetGlobalTime()
+    virtual long long GetGlobalTime()
     {
       std::chrono::high_resolution_clock::time_point Now = std::chrono::high_resolution_clock::now();
       return std::chrono::duration_cast<Duration>(Now - Start).count();
@@ -71,16 +73,61 @@ namespace quokka
   };
 
   STDChronoTimer* STDChronoTimer::Instance = NULL;
-  static Timer* Timer() { return STDChronoTimer::GetInstance(); }
+
+  typedef unsigned long long uint64;
+  typedef unsigned long uint32;
+  
+  class HighResolutionTimer : public Timer, public Singletone<HighResolutionTimer>
+  {
+  public:
+    
+    HighResolutionTimer()
+      :Last(rdtsc())
+      , Start(Last)
+    {}
+    virtual ~HighResolutionTimer(){}
+
+    uint64 rdtsc()
+    {
+      uint32 cur_time;
+      __asm rdtsc;
+      __asm mov [cur_time], eax;
+      return cur_time;
+    }
+
+    // Call only once per frame!
+    virtual void CalculateFrameTime()
+    {
+      uint64 Now = rdtsc();
+      LastFrameDuration = Now - Last;
+      Last = Now;
+    }
+
+    virtual float GetFrameTime() { return LastFrameDuration / 1000.0f; }
+
+    virtual long long GetGlobalTime()
+    {
+      uint64 Now = rdtsc();
+      return Now - Start;
+    }
+
+  private:
+    uint64 LastFrameDuration;
+    uint64 Last;
+    uint64 Start;
+  };
+
+  HighResolutionTimer* HighResolutionTimer::Instance = NULL;
+  static Timer* Timer() { return HighResolutionTimer::GetInstance(); }
 }
 
 namespace quokka
 {
   struct ProfilerStamp
   {    
-    float Start = 0;
-    float Stop = 0;
-    float Sum = 0;
+    uint64 Start = 0;
+    uint64 Stop = 0;
+    uint64 Sum = 0;
   };
 
   class Profiler : public Singletone<Profiler>
@@ -89,6 +136,7 @@ namespace quokka
     void Start(std::string Name)
     {
       ProfilerStamp ps;
+      if (Stamps.find(Name) != Stamps.end()) ps = Stamps[Name];
       ps.Start = Timer()->GetGlobalTime();
       Stamps[Name] = ps;
     }
@@ -96,14 +144,17 @@ namespace quokka
     void Stop(std::string Name)
     {
       Stamps[Name].Stop = Timer()->GetGlobalTime();
-      Stamps[Name].Sum += Stamps[Name].Stop - Stamps[Name].Start;
+      uint64 Elapsed = Stamps[Name].Stop - Stamps[Name].Start;
+      //print_out("\n%20s : %15u", Name.c_str(), Elapsed);
+      Stamps[Name].Sum = Stamps[Name].Sum + Elapsed;
     }
 
     void Print()
     {
       for (std::map<std::string, ProfilerStamp>::const_iterator it = Stamps.begin(); it != Stamps.end(); ++it)
       {
-        printf("\n%20s : %15.2f", it->first.c_str(), it->second.Sum);
+        print_out("\n%20s : %15u", it->first.c_str(), it->second.Sum);
+        //print_out("\n%20s : %15.5f", it->first.c_str(), it->second.Sum/1.0e9f);
       }
     }
 
